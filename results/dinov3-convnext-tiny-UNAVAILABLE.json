@@ -1,0 +1,8 @@
+{
+  "embedder": "dinov3-convnext-tiny",
+  "status": "unavailable",
+  "reason": "gated repo on HuggingFace",
+  "hf_repo": "facebook/dinov3-convnext-tiny-pretrain-lvd1689m",
+  "details": "401 Client Error when accessing https://huggingface.co/facebook/dinov3-convnext-tiny-pretrain-lvd1689m/resolve/main/preprocessor_config.json. Access requires a HuggingFace account that has accepted the DINOv3 license. The eval harness is ready and will work once gate-accepted in a parallel session: run `huggingface-cli login` (or set HF_TOKEN) then re-run scripts/evaluate.py --embedder dinov3-convnext-tiny.",
+  "completed_at": "2026-04-29T20:50:00Z"
+}

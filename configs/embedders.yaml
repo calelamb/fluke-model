@@ -1,0 +1,24 @@
+# Embedder configuration for the M-Model-0 prototype.
+# All embeddings are L2-normalized at the output for cosine == inner product.
+
+embedders:
+  miewid-msv3:
+    hf_repo: conservationxlabs/miewid-msv3
+    image_size: 440
+    embed_dim: 2152  # probed at load time; MiewIdNet over EffNetV2-M actually emits 2152-dim
+    license: "model weights public on HF; check repo for usage terms"
+    notes: "EfficientNetV2-M + sub-center ArcFace; trained for animal re-ID across 64 species incl. orca."
+
+  dinov2-small:
+    hf_repo: facebook/dinov2-small
+    image_size: 224
+    embed_dim: 384
+    license: Apache-2.0
+    notes: "ViT-S/14 self-supervised on ~142M images. Plan-of-record per fluke/docs/model.md."
+
+  dinov3-convnext-tiny:
+    hf_repo: facebook/dinov3-convnext-tiny-pretrain-lvd1689m
+    image_size: 224
+    embed_dim: 768
+    license: "DINOv3 license (research / non-commercial)"
+    notes: "ConvNeXt-Tiny SSL on 1.7B images (Aug 2025). Free upgrade over DINOv2-S."

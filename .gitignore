@@ -1,0 +1,14 @@
+data/
+*.pt
+*.pth
+*.faiss
+*.npz
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.DS_Store
+*.egg-info/
+build/
+dist/

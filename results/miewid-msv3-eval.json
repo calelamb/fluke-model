@@ -1,0 +1,2620 @@
+{
+  "embedder": "miewid-msv3",
+  "embed_dim": 2152,
+  "n_photos": 100,
+  "n_individuals": 10,
+  "metrics": {
+    "top_1": 0.88,
+    "top_3": 0.93,
+    "top_5": 0.98,
+    "mrr": 0.9167500000000001
+  },
+  "wall_clock_seconds": {
+    "embed": 19.049320220947266,
+    "evaluate": 0.005820751190185547,
+    "total": 19.05514097213745
+  },
+  "per_query": [
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004667.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.46516287326812744
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.33828625082969666
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3138794998327891
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.29828813672065735
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.29774579405784607
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003457.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.5172396898269653
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.44711023569107056
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3681286871433258
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.34304019808769226
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.34229735533396405
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002951.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.808313767115275
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.37994757294654846
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.3478747506936391
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3209581673145294
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.30134178201357525
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001585.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.5039265255133311
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3203226725260417
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2795851603150368
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2536865770816803
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2529897342125575
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001034.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.29543834924697876
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2715348203976949
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2666851182778676
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.2538724144299825
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.24793738623460135
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002104.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.3701575994491577
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.35227365295092267
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3289011816183726
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.32870688041051227
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.31134756406148273
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003805.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.40075333913167316
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3562663793563843
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3438003559907277
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3200819691022237
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.31350041429201764
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001485.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.519977867603302
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.31016166011492413
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.30984680851300556
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.2529746989409129
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.24938936034838358
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000167.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.6835612654685974
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.3452913959821065
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.32188132405281067
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2984580993652344
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.28720584511756897
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004377.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.4425141016642253
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.36298323671023053
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.31178592642148334
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3036428888638814
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.2891392260789871
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000598.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.5320285161336263
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3532349467277527
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3530666579802831
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2700136850277583
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.26138410965601605
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000613.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.8141496578852335
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.381676306327184
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.28974808752536774
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.26459919412930805
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2571531335512797
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005419.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.839600682258606
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3785119354724884
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.3403538962205251
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.30188892285029095
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2947142422199249
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002983.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.5272287627061208
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3474826117356618
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2923797269662221
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.28638919194539386
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2750863383213679
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005257.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.4367830256621043
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.38412227233250934
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.35228559374809265
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.31161242723464966
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2928197383880615
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001252.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.4426635305086772
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2967641254266103
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2617609699567159
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.26001986861228943
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.22634024918079376
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003740.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.33771173655986786
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.21723879873752594
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.18777231872081757
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.16231236358483633
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.16165495415528616
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002851.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.3354550302028656
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2776198089122772
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2673235932985942
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2151688039302826
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.179719939827919
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005782.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.5940451423327128
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.32550784945487976
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.30483131607373554
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.27499446272850037
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.26019928852717084
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004516.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.5574524104595184
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.406050905585289
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2807707687218984
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2679498593012492
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.2606357882420222
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000114.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.4142114420731862
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.23373320202032724
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2269624968369802
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.22084495921929678
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.21137197315692902
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002471.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.7999421755472819
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3657044470310211
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3121822079022725
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2615623474121094
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.257799357175827
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003959.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.8355764547983805
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.4109644889831543
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.36248843868573505
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.32528772950172424
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3043948213259379
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004414.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.6114669839541117
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3983548879623413
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.24628620346387228
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.222680593530337
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.22057378788789114
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001735.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.6281789938608805
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.31337780753771466
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.3099340796470642
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2765142023563385
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.26672355830669403
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005646.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.37105703353881836
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.36165643731753033
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.28089962402979535
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.26313500106334686
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.241361270348231
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005093.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.4569802482922872
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.3332840104897817
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.31461798151334125
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2789024660984675
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.27426546812057495
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003283.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.5904695192972819
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.30394136905670166
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2590706944465637
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2584742208321889
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.25157715876897174
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003650.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.36505749821662903
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.35037903984387714
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.33470218380292255
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.32437366247177124
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2773655752340953
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002015.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.4820762077967326
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.32535994052886963
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.31978801389535266
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2965572625398636
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2868318160374959
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005443.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.36626607179641724
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2070377618074417
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.20603235065937042
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.17785502970218658
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.15286879738171896
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000607.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.7340445319811503
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.34906303882598877
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.28018786509831745
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.27879592776298523
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.27565160393714905
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005812.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.7621475458145142
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.45852038264274597
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.4009781877199809
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.37098445494969684
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.35753313700358075
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001915.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.5307447910308838
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.30068086584409076
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.26518890261650085
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.25074056287606555
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2415261964003245
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005593.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.7038587331771851
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.30671821037928265
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2904556095600128
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.28281790018081665
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.25310706595579785
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001052.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.3667231301466624
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2772201895713806
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.25043120980262756
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.24109457929929098
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.23464701076348624
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001243.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.6195278565088908
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.4407563805580139
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.28016941746075946
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2451333999633789
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.24360738197962442
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005232.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.408139447371165
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.31762033700942993
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.29622631271680194
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.27439846098423004
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.24131880700588226
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002878.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.6494374871253967
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.3840271631876628
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.34470120072364807
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.3076282739639282
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.29154327511787415
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001988.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.44064030051231384
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.36716259519259137
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3636740893125534
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.3365292449792226
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2998436689376831
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001491.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.3190678656101227
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.27543293436368305
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2678099075953166
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2534527579943339
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.23936415215333304
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003582.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.7860856056213379
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3956548074881236
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.33106980721155804
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2786724368731181
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2757630795240402
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005131.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.43873849511146545
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.38283801078796387
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.37415023644765216
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.3136451343695323
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.30462005734443665
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004979.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.5449925263722738
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.4604252874851227
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2996066113313039
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.29758206009864807
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.24371836086114249
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004818.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.38883699973424274
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3374922076861064
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3152409791946411
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.298210342725118
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2951519588629405
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002414.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.3981487254301707
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3090059955914815
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2989816665649414
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2838395833969116
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.2746027857065201
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001187.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.264992023507754
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.1736150085926056
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.17130469779173532
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.16083706418673197
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.16007325053215027
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001636.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.32903583844502765
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.3149584134419759
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3128192871809006
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.31233055392901105
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.302536537249883
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002981.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.4094051619370778
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.33894628286361694
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.26519935329755145
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2536114851633708
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.24758980671564737
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002013.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.43238980571428937
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3579139709472656
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.34364186724026996
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3119618097941081
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3006693621476491
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001396.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.4548862079779307
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3610299030939738
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2949123779932658
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.29060928523540497
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.28968845804532367
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001408.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.7710931698481241
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3706650932629903
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.31003813942273456
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2888151705265045
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.28171807527542114
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004310.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.44506189227104187
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.4402267138163249
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.37816038727760315
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3623161017894745
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.3045850098133087
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000011.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.6675775647163391
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.43513039747873944
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2778175473213196
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.27736443281173706
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2754964729150136
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001863.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.545303742090861
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2898183266321818
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2761136641105016
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2404967894156774
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.23984968662261963
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005681.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.39678390820821124
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.26985853910446167
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2656480669975281
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.26406123240788776
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2544155418872833
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002771.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.628056546052297
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.4225023686885834
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2441915770371755
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.23491692543029785
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.20623327294985452
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002411.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.5828399260838827
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.33642932772636414
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.30794649322827655
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2975851595401764
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.2949233055114746
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004933.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.2978695134321849
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.29040492077668506
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.28388524055480957
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.26887738704681396
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2544178018967311
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002832.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.38313330213228863
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3258679310480754
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.28631959358851117
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2707103689511617
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.256997674703598
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001242.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.41322176655133563
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3827194074789683
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.36925143003463745
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3665172904729843
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3060290416081746
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004511.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.72974693775177
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.34786905845006305
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.32330845793088275
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3207900623480479
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3079378704229991
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004775.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.7955115636189779
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.38496270775794983
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3339842160542806
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.32988648613293964
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3265186995267868
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002826.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.4125155607859294
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.30000706513722736
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.29412809014320374
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.28427260120709735
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.28244392077128094
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005053.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.6545172333717346
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3151503751675288
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2839411000410716
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2589857478936513
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.24070227642854056
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003724.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.36069153745969135
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2822806239128113
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2734081248442332
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.24199041227499643
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.24063382546106973
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003948.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.5335939228534698
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.45794544617335003
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.25928839047749835
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.22473262747128805
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.22324898838996887
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000575.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.5394324958324432
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3043683369954427
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.24526963631312051
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.24474220474561056
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.23133918146292368
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001154.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.690696120262146
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.34062525629997253
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2528769721587499
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.24223285913467407
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.238304873307546
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001633.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.5288852254549662
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.32748910784721375
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.28864636023839313
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.2613625725110372
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2410026490688324
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000716.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.40609338879585266
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3051341672738393
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2602003316084544
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.2268558939297994
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.20692723989486694
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004402.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.7961089015007019
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.33187269171079
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.26109998921553296
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.24979684253533682
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.24031732976436615
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001911.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.8460240562756857
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.40866610407829285
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.3701484501361847
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.34367379546165466
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.32423945267995197
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005252.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.5590282281239828
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.41608959436416626
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3002578218777974
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.2818708618481954
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2629590878883998
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002417.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.4662518997987111
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3822970390319824
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.36199986934661865
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3167915443579356
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.31443379322687787
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005735.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.42058874169985455
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.2714051107565562
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.26231036086877185
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2617001036802928
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.24825040996074677
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002566.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.5052284995714823
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.4046388268470764
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.31751612822214764
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2769470314184825
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.27666908502578735
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005668.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.5769107341766357
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3244345684846242
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.29280851284662884
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.2728140751520793
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.25869057575861615
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005546.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.6339947183926901
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.3586978316307068
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.31619492173194885
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2963550140460332
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.26707500716050464
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002014.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.4123111168543498
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3446003198623657
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3276166319847107
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.31685685118039447
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.29752973715464276
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000571.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.41275792320569354
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.37964009245236713
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3292178511619568
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.32182297110557556
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2975793480873108
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001902.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.791545550028483
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.37000738581021625
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3099895616372426
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.275013933579127
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.25390954812367755
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003430.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.8101513187090555
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.3909708857536316
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.34834110736846924
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3284417490164439
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.29944007098674774
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001974.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale010",
+          "score": 0.6808132529258728
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.36876046657562256
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3079971671104431
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2705993751684825
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.26878008246421814
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004367.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.6707694133122762
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.33387627204259235
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.29979358116785687
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.28235310316085815
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.26686014235019684
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002162.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.33151471614837646
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2245641897122065
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.14890989661216736
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.14364234606424967
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.13614646345376968
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004677.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.42838336030642193
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.29029470185438794
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.27676163117090863
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.26627061267693836
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.261471688747406
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004853.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.3527827461560567
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2606796721617381
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.2585941404104233
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.25073890884717304
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.2140398919582367
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004671.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.4215761522452037
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.3071775436401367
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.30425069729487103
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.23444723089536032
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.22679656247297922
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003032.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.4563107192516327
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.34722499052683514
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.3143080770969391
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.30487021803855896
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.3012414177258809
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004259.jpg",
+      "truth": "whale015",
+      "top5": [
+        {
+          "individual_id": "whale015",
+          "score": 0.4941670596599579
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.32315370440483093
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.28179637094338733
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2709561387697856
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.26985309024651843
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000003889.jpg",
+      "truth": "whale093",
+      "top5": [
+        {
+          "individual_id": "whale093",
+          "score": 0.8025711377461752
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3500159978866577
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.2835693508386612
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.2630915741125743
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.26263427734375
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001582.jpg",
+      "truth": "whale066",
+      "top5": [
+        {
+          "individual_id": "whale066",
+          "score": 0.8482030630111694
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.4156652092933655
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.3456730047861735
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.31159236033757526
+        },
+        {
+          "individual_id": "whale015",
+          "score": 0.3073430359363556
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005455.jpg",
+      "truth": "whale010",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.3158491651217143
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.30890565117200214
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3061744272708893
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2791437606016795
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.275454709927241
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000002885.jpg",
+      "truth": "whale062",
+      "top5": [
+        {
+          "individual_id": "whale062",
+          "score": 0.7203324238459269
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.33441994587580365
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.286850169301033
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.28529854615529376
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.25356008609135944
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000004664.jpg",
+      "truth": "whale077",
+      "top5": [
+        {
+          "individual_id": "whale077",
+          "score": 0.4478546977043152
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3182233969370524
+        },
+        {
+          "individual_id": "whale062",
+          "score": 0.3154010971387227
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.31150757273038227
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.29732271035512287
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000001545.jpg",
+      "truth": "whale082",
+      "top5": [
+        {
+          "individual_id": "whale082",
+          "score": 0.4600764214992523
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.37123483419418335
+        },
+        {
+          "individual_id": "whale010",
+          "score": 0.3365594943364461
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.3016076385974884
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.3005277216434479
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000363.jpg",
+      "truth": "whale189",
+      "top5": [
+        {
+          "individual_id": "whale189",
+          "score": 0.6017135580380758
+        },
+        {
+          "individual_id": "whale082",
+          "score": 0.2720307906468709
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2718483507633209
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2624758680661519
+        },
+        {
+          "individual_id": "whale028",
+          "score": 0.22830779353777567
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000000464.jpg",
+      "truth": "whale028",
+      "top5": [
+        {
+          "individual_id": "whale028",
+          "score": 0.37556712826093036
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.3109113872051239
+        },
+        {
+          "individual_id": "whale036",
+          "score": 0.2357233315706253
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.23096906145413718
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.20127028226852417
+        }
+      ]
+    },
+    {
+      "path": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/beluga-id-2022/raw/beluga.coco/images/train2022/000000005286.jpg",
+      "truth": "whale036",
+      "top5": [
+        {
+          "individual_id": "whale036",
+          "score": 0.45373140772183734
+        },
+        {
+          "individual_id": "whale077",
+          "score": 0.2975858251253764
+        },
+        {
+          "individual_id": "whale066",
+          "score": 0.26468316713968915
+        },
+        {
+          "individual_id": "whale093",
+          "score": 0.2208185295263926
+        },
+        {
+          "individual_id": "whale189",
+          "score": 0.20628856619199118
+        }
+      ]
+    }
+  ],
+  "completed_at": "2026-04-29T20:42:54.700501+00:00"
+}
