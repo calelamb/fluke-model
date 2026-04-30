@@ -17,6 +17,10 @@ dependencies = [
   "tqdm>=4.66",
   "requests>=2.31",
   "kaggle>=1.6",
+  "fastapi>=0.115",
+  "uvicorn>=0.30",
+  "pydantic>=2.8",
+  "python-multipart>=0.0.9",
 ]
 
 [dependency-groups]
