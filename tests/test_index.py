@@ -12,7 +12,7 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from fluke_model.index import (
+from fluke_model.index import (  # noqa: E402
     aggregate_per_individual,
     build_index,
     load_index,

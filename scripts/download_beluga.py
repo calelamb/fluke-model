@@ -20,7 +20,6 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import sys
 import urllib.request
 import zipfile
@@ -144,7 +143,7 @@ def main() -> int:
     manifest_csv = data_dir / "manifest.csv"
 
     print(f"Beluga ID 2022 download to {data_dir}")
-    print(f"  license: CDLA-Permissive-2.0")
+    print("  license: CDLA-Permissive-2.0")
     print()
 
     # Step 1: download

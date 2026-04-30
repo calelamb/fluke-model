@@ -8,8 +8,13 @@ search trivially fast on CPU.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from dataclasses import dataclass
+
+# macOS wheels for PyTorch and FAISS can load separate OpenMP runtimes in the
+# same process. Without this, importing torch before faiss aborts the process.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
 import faiss
 import numpy as np
@@ -51,8 +56,7 @@ def build_index(
         raise ValueError(
             f"embeddings rows ({embeddings.shape[0]}) != len(metadata) ({len(metadata)})"
         )
-    if embeddings.dtype != np.float32:
-        embeddings = embeddings.astype(np.float32)
+    embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
 
     dim = int(embeddings.shape[1])
     index = faiss.IndexFlatIP(dim)
@@ -96,8 +100,7 @@ def search(bundle: IndexBundle, query: np.ndarray, k: int) -> list[tuple[float, 
     """
     if query.ndim == 1:
         query = query[None, :]
-    if query.dtype != np.float32:
-        query = query.astype(np.float32)
+    query = np.ascontiguousarray(query, dtype=np.float32)
     scores, idxs = bundle.index.search(query, k)
     out: list[tuple[float, dict]] = []
     for score, idx in zip(scores[0], idxs[0]):

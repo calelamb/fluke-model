@@ -9,13 +9,14 @@ dependencies = [
   "torchvision>=0.20",
   "transformers>=4.45,<4.50",
   "timm>=1.0",
-  "faiss-cpu>=1.8",
+  "faiss-cpu>=1.8,<1.13",
   "Pillow>=10.4",
-  "numpy>=1.26",
+  "numpy>=1.26,<2.3",
   "scikit-learn>=1.5",
   "pyyaml>=6.0",
   "tqdm>=4.66",
   "requests>=2.31",
+  "kaggle>=1.6",
 ]
 
 [dependency-groups]

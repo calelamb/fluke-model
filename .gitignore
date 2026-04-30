@@ -1,4 +1,5 @@
 data/
+artifacts/
 *.pt
 *.pth
 *.faiss

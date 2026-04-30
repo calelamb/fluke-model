@@ -11,7 +11,7 @@ SRC = Path(__file__).resolve().parent.parent / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from fluke_model.metrics import top_k_accuracy, mean_reciprocal_rank
+from fluke_model.metrics import top_k_accuracy, mean_reciprocal_rank  # noqa: E402
 
 
 def test_top_k_accuracy_perfect():
