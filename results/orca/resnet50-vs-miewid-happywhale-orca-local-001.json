@@ -1,0 +1,74 @@
+{
+  "dataset": "happywhale_orca",
+  "splits_dir": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/manifests/happywhale_orca_splits",
+  "train_stats": {
+    "rows": 105,
+    "individuals": 4,
+    "species": {
+      "kiler_whale": 105
+    },
+    "images_per_individual": {
+      "min": 17,
+      "max": 31,
+      "median": 28
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 4
+  },
+  "test_stats": {
+    "rows": 22,
+    "individuals": 4,
+    "species": {
+      "kiler_whale": 22
+    },
+    "images_per_individual": {
+      "min": 3,
+      "max": 7,
+      "median": 6
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 4
+  },
+  "results": [
+    {
+      "n_reference_images": 105,
+      "n_query_images": 22,
+      "n_reference_individuals": 4,
+      "n_query_individuals": 4,
+      "metrics": {
+        "top_1": 0.8181818181818182,
+        "top_3": 1.0,
+        "top_5": 1.0,
+        "mrr": 0.9090909090909091
+      },
+      "model": "miewid-msv3",
+      "metadata": {
+        "embedder": "miewid-msv3",
+        "embed_dim": 2152
+      }
+    },
+    {
+      "n_reference_images": 105,
+      "n_query_images": 22,
+      "n_reference_individuals": 4,
+      "n_query_individuals": 4,
+      "metrics": {
+        "top_1": 0.5454545454545454,
+        "top_3": 0.9090909090909091,
+        "top_5": 1.0,
+        "mrr": 0.7348484848484848
+      },
+      "model": "trained-resnet50",
+      "metadata": {
+        "backbone": "resnet50",
+        "embed_dim": 256,
+        "image_size": 224,
+        "source_dataset": "happywhale_orca",
+        "split_seed": 42,
+        "num_train_images": 105,
+        "num_train_individuals": 4
+      }
+    }
+  ],
+  "completed_at": "2026-04-30T02:04:05.757424+00:00"
+}

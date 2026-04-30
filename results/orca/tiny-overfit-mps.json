@@ -1,0 +1,54 @@
+{
+  "run_name": "tiny-overfit-mps",
+  "checkpoint": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/artifacts/models/orca/tiny-overfit-mps/model.pt",
+  "backbone": "resnet50",
+  "embed_dim": 256,
+  "image_size": 224,
+  "dataset": "happywhale_orca",
+  "split_seed": 42,
+  "train_stats": {
+    "rows": 12,
+    "individuals": 3,
+    "species": {
+      "kiler_whale": 12
+    },
+    "images_per_individual": {
+      "min": 4,
+      "max": 4,
+      "median": 4
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 3
+  },
+  "val_stats": {
+    "rows": 0,
+    "individuals": 0,
+    "species": {},
+    "images_per_individual": {
+      "min": 0,
+      "max": 0,
+      "median": 0
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 0
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.7946444153785706,
+      "val_metrics": {}
+    },
+    {
+      "epoch": 2,
+      "loss": 0.17158503830432892,
+      "val_metrics": {}
+    },
+    {
+      "epoch": 3,
+      "loss": 0.1406126171350479,
+      "val_metrics": {}
+    }
+  ],
+  "wall_clock_seconds": 11.179455995559692,
+  "completed_at": "2026-04-30T02:00:52.743743+00:00"
+}

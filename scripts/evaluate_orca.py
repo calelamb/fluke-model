@@ -81,6 +81,7 @@ def main() -> int:
     parser.add_argument("--splits-dir", default=str(REPO_ROOT / "data/manifests/happywhale_orca_splits"))
     parser.add_argument("--baseline", action="append", default=["miewid-msv3"], help="Frozen embedder baseline; repeatable.")
     parser.add_argument("--skip-baseline", action="store_true", help="Evaluate only the trained checkpoint.")
+    parser.add_argument("--include-per-query", action="store_true", help="Persist per-query match records.")
     parser.add_argument("--trained-checkpoint", default="", help="Path to a train_embedder.py checkpoint.")
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--device", default="auto")
@@ -107,6 +108,8 @@ def main() -> int:
                 test_rows,
                 embedder_name=baseline,
             )
+            if not args.include_per_query:
+                result.pop("per_query", None)
             result.update({"model": baseline, "metadata": meta})
             results.append(result)
         except EmbedderUnavailable as e:
@@ -126,6 +129,8 @@ def main() -> int:
             test_rows,
             embedder_name=f"trained-{metadata['backbone']}",
         )
+        if not args.include_per_query:
+            result.pop("per_query", None)
         result.update({"model": f"trained-{metadata['backbone']}", "metadata": metadata})
         results.append(result)
 

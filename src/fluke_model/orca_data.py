@@ -23,6 +23,8 @@ ORCA_SPECIES_ALIASES = {
     "killer_whale",
     "killerwhale",
     "killer whale",
+    "kiler_whale",
+    "kiler whale",
     "orca",
     "orcinus_orca",
     "orcinus orca",
