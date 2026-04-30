@@ -22,9 +22,13 @@ DEFAULT_OUT = REPO_ROOT / "data/happywhale"
 
 
 def has_kaggle_credentials() -> bool:
-    return bool(os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY")) or (
-        Path.home() / ".kaggle/kaggle.json"
-    ).exists()
+    kaggle_dir = Path.home() / ".kaggle"
+    return (
+        bool(os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"))
+        or bool(os.environ.get("KAGGLE_API_TOKEN"))
+        or (kaggle_dir / "kaggle.json").exists()
+        or (kaggle_dir / "access_token").exists()
+    )
 
 
 def unzip_archives(out_dir: Path) -> list[str]:
@@ -65,7 +69,7 @@ def main() -> int:
         print(
             "Kaggle credentials are missing.\n\n"
             "1. Create a Kaggle API token from https://www.kaggle.com/settings\n"
-            "2. Save it as ~/.kaggle/kaggle.json, or set KAGGLE_USERNAME and KAGGLE_KEY.\n"
+            "2. Save it as ~/.kaggle/access_token, ~/.kaggle/kaggle.json, or set KAGGLE_API_TOKEN.\n"
             "3. Open the Happywhale dataset/competition page in Kaggle and accept the terms.\n"
             "4. Re-run this script.",
             file=sys.stderr,
