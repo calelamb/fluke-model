@@ -13,6 +13,7 @@ import csv
 import json
 import os
 import sys
+import time
 import zipfile
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -108,11 +109,106 @@ def choose_download_rows(rows: list[dict], max_images: int) -> list[dict]:
     return selected
 
 
-def download_orca_images(api, competition: str, rows: list[dict], images_dir: Path) -> dict:
+def choose_repeated_identity_rows(
+    rows: list[dict],
+    *,
+    target_identities: int,
+    min_images_per_identity: int,
+    max_images_per_identity: int,
+) -> list[dict]:
+    """Choose identity groups useful for metric-learning training."""
+    if target_identities <= 0:
+        raise ValueError("target_identities must be > 0")
+    if min_images_per_identity < 2:
+        raise ValueError("min_images_per_identity must be >= 2")
+    if max_images_per_identity < min_images_per_identity:
+        raise ValueError("max_images_per_identity must be >= min_images_per_identity")
+
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        grouped[row["individual_id"]].append(row)
+    selected: list[dict] = []
+    chosen = 0
+    for _individual_id, group in sorted(grouped.items(), key=lambda item: (-len(item[1]), item[0])):
+        if len(group) < min_images_per_identity:
+            continue
+        selected.extend(group[:max_images_per_identity])
+        chosen += 1
+        if chosen >= target_identities:
+            break
+    if chosen < target_identities:
+        raise ValueError(
+            f"Only found {chosen} identities with >= {min_images_per_identity} images; "
+            f"target was {target_identities}."
+        )
+    return selected
+
+
+def write_download_plan(
+    path: Path,
+    *,
+    rows: list[dict],
+    images_dir: Path,
+    selection_mode: str,
+    args: argparse.Namespace,
+) -> dict:
+    grouped: dict[str, list[dict]] = defaultdict(list)
+    for row in rows:
+        grouped[row["individual_id"]].append(row)
+
+    identities: list[dict] = []
+    already_present = 0
+    missing = 0
+    for individual_id, group in sorted(grouped.items(), key=lambda item: (-len(item[1]), item[0])):
+        images = [row["image"] for row in group]
+        present_images = [image for image in images if (images_dir / image).exists()]
+        missing_images = [image for image in images if not (images_dir / image).exists()]
+        already_present += len(present_images)
+        missing += len(missing_images)
+        identities.append(
+            {
+                "individual_id": individual_id,
+                "species": sorted({row["species"] for row in group}),
+                "planned_images": images,
+                "already_present": len(present_images),
+                "missing": len(missing_images),
+            }
+        )
+
+    payload = {
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "selection_mode": selection_mode,
+        "target_identities": args.target_identities,
+        "min_images_per_identity": args.min_images_per_identity,
+        "max_images_per_identity": args.max_images_per_identity,
+        "max_images": args.max_images,
+        "planned_rows": len(rows),
+        "planned_identities": len(identities),
+        "already_present": already_present,
+        "missing": missing,
+        "identities": identities,
+    }
+    path.write_text(json.dumps(payload, indent=2))
+    return payload
+
+
+def is_rate_limit_error(error: Exception) -> bool:
+    return "429" in str(error) or "Too Many Requests" in str(error)
+
+
+def download_orca_images(
+    api,
+    competition: str,
+    rows: list[dict],
+    images_dir: Path,
+    *,
+    sleep_seconds: float,
+) -> dict:
     images_dir.mkdir(parents=True, exist_ok=True)
     downloaded = 0
     skipped = 0
     failed: list[str] = []
+    rate_limited = False
     total = len(rows)
     for idx, row in enumerate(rows, start=1):
         image = row["image"]
@@ -121,7 +217,9 @@ def download_orca_images(api, competition: str, rows: list[dict], images_dir: Pa
             skipped += 1
             continue
         archive = images_dir / f"{image}.zip"
+        requested = False
         try:
+            requested = True
             api.competition_download_file(
                 competition,
                 f"train_images/{image}",
@@ -134,10 +232,19 @@ def download_orca_images(api, competition: str, rows: list[dict], images_dir: Pa
                 raise FileNotFoundError(f"download did not produce {target}")
             downloaded += 1
         except Exception as e:
+            if is_rate_limit_error(e):
+                rate_limited = True
+                print(
+                    f"  rate limited at image {idx}/{total}; stop now and rerun with --resume later.",
+                    file=sys.stderr,
+                )
+                break
             failed.append(f"{image}: {e}")
         if idx % 25 == 0 or idx == total:
             print(f"  images {idx}/{total} | downloaded {downloaded} | skipped {skipped} | failed {len(failed)}")
-    return {"downloaded": downloaded, "skipped": skipped, "failed": failed}
+        if sleep_seconds > 0 and requested and not rate_limited:
+            time.sleep(sleep_seconds)
+    return {"downloaded": downloaded, "skipped": skipped, "failed": failed, "rate_limited": rate_limited}
 
 
 def verify_happywhale_files(out_dir: Path, *, require_images: bool = True) -> dict:
@@ -171,6 +278,11 @@ def main() -> int:
         default=0,
         help="Limit selective orca-image downloads for a first local run (0 = all orca images).",
     )
+    parser.add_argument("--target-identities", type=int, default=0)
+    parser.add_argument("--min-images-per-identity", type=int, default=8)
+    parser.add_argument("--max-images-per-identity", type=int, default=15)
+    parser.add_argument("--sleep-seconds", type=float, default=0.0)
+    parser.add_argument("--resume", action="store_true", help="Skip present files and continue an existing plan.")
     args = parser.parse_args()
 
     out_dir = Path(args.out)
@@ -208,16 +320,39 @@ def main() -> int:
         else:
             train_csv = ensure_train_csv(api, args.competition, out_dir)
             orca_rows = read_orca_rows(train_csv)
-            selected_rows = choose_download_rows(orca_rows, args.max_images)
+            if args.target_identities > 0:
+                selected_rows = choose_repeated_identity_rows(
+                    orca_rows,
+                    target_identities=args.target_identities,
+                    min_images_per_identity=args.min_images_per_identity,
+                    max_images_per_identity=args.max_images_per_identity,
+                )
+                selection_mode = "repeated_identity"
+            else:
+                selected_rows = choose_download_rows(orca_rows, args.max_images)
+                selection_mode = "max_images" if args.max_images > 0 else "all_orca"
+            plan_path = out_dir / "orca_download_plan.json"
+            plan = write_download_plan(
+                plan_path,
+                rows=selected_rows,
+                images_dir=out_dir / "train_images",
+                selection_mode=selection_mode,
+                args=args,
+            )
             print(
                 f"Happywhale metadata has {len(orca_rows)} killer-whale/orca rows; "
                 f"downloading {len(selected_rows)} image files."
+            )
+            print(
+                f"Download plan: {plan_path} "
+                f"({plan['planned_identities']} IDs, {plan['already_present']} present, {plan['missing']} missing)."
             )
             download_summary = download_orca_images(
                 api,
                 args.competition,
                 selected_rows,
                 out_dir / "train_images",
+                sleep_seconds=args.sleep_seconds,
             )
             if download_summary["failed"]:
                 print("Some image downloads failed:", file=sys.stderr)
@@ -226,6 +361,8 @@ def main() -> int:
                 if len(download_summary["failed"]) > 10:
                     print(f"  ... {len(download_summary['failed']) - 10} more", file=sys.stderr)
                 return 5
+            if download_summary["rate_limited"]:
+                print("Kaggle rate limit reached. Partial data is preserved; rerun with --resume later.", file=sys.stderr)
             extracted = []
             summary = verify_happywhale_files(out_dir)
             selected_manifest_rows = [
@@ -245,6 +382,7 @@ def main() -> int:
                 "downloaded": download_summary["downloaded"],
                 "skipped": download_summary["skipped"],
                 "failed": len(download_summary["failed"]),
+                "rate_limited": download_summary["rate_limited"],
             }
     except Exception as e:
         print(f"Kaggle download failed: {e}", file=sys.stderr)

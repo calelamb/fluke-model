@@ -1,0 +1,93 @@
+{
+  "run_name": "resnet50-happywhale-orca-local-002",
+  "checkpoint": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/artifacts/models/orca/resnet50-happywhale-orca-local-002/model.pt",
+  "backbone": "resnet50",
+  "embed_dim": 256,
+  "image_size": 224,
+  "dataset": "happywhale_orca",
+  "split_seed": 42,
+  "train_stats": {
+    "rows": 336,
+    "individuals": 25,
+    "species": {
+      "kiler_whale": 281,
+      "killer_whale": 55
+    },
+    "images_per_individual": {
+      "min": 11,
+      "max": 31,
+      "median": 11
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 25
+  },
+  "val_stats": {
+    "rows": 64,
+    "individuals": 25,
+    "species": {
+      "kiler_whale": 54,
+      "killer_whale": 10
+    },
+    "images_per_individual": {
+      "min": 2,
+      "max": 7,
+      "median": 2
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 25
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.2976791237791379,
+      "val_metrics": {
+        "top_1": 0.328125,
+        "top_3": 0.4375,
+        "top_5": 0.5625,
+        "mrr": 0.44734819408532644
+      }
+    },
+    {
+      "epoch": 2,
+      "loss": 0.1461371953288714,
+      "val_metrics": {
+        "top_1": 0.25,
+        "top_3": 0.359375,
+        "top_5": 0.421875,
+        "mrr": 0.3704134534787108
+      }
+    },
+    {
+      "epoch": 3,
+      "loss": 0.08381244664390881,
+      "val_metrics": {
+        "top_1": 0.25,
+        "top_3": 0.421875,
+        "top_5": 0.546875,
+        "mrr": 0.3954324538308913
+      }
+    },
+    {
+      "epoch": 4,
+      "loss": 0.03831209304432074,
+      "val_metrics": {
+        "top_1": 0.203125,
+        "top_3": 0.359375,
+        "top_5": 0.5625,
+        "mrr": 0.3592804675410374
+      }
+    },
+    {
+      "epoch": 5,
+      "loss": 0.01361926986525456,
+      "val_metrics": {
+        "top_1": 0.171875,
+        "top_3": 0.421875,
+        "top_5": 0.53125,
+        "mrr": 0.354967131265385
+      }
+    }
+  ],
+  "wall_clock_seconds": 106.00819301605225,
+  "completed_at": "2026-04-30T07:13:47.142830+00:00"
+}
