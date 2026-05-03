@@ -35,51 +35,7 @@ from fluke_model.trainable import (  # noqa: E402
     embed_rows,
     save_checkpoint,
 )
-
-
-def select_device(name: str) -> torch.device:
-    if name != "auto":
-        return torch.device(name)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
-
-
-def _build_scheduler(
-    optimizer: torch.optim.Optimizer,
-    *,
-    kind: str,
-    epochs: int,
-    warmup_epochs: int,
-    base_lr: float,
-    min_lr: float,
-) -> torch.optim.lr_scheduler.LRScheduler | None:
-    """Linear-warmup + cosine-decay LR schedule, applied per-epoch.
-
-    Returns None when `kind == "none"`. The cosine schedule decays from
-    `base_lr` to `min_lr` over the post-warmup epochs.
-    """
-    if kind == "none":
-        return None
-
-    import math
-
-    warmup = max(0, min(warmup_epochs, epochs - 1))
-    decay_span = max(1, epochs - warmup)
-    floor_factor = min_lr / base_lr if base_lr > 0 else 0.0
-
-    def lr_lambda(epoch_idx: int) -> float:
-        # `epoch_idx` is 0-based and increments after each scheduler.step().
-        if warmup > 0 and epoch_idx < warmup:
-            return float(epoch_idx + 1) / float(warmup)
-        progress = (epoch_idx - warmup) / decay_span
-        progress = min(1.0, max(0.0, progress))
-        cos = 0.5 * (1.0 + math.cos(math.pi * progress))
-        return floor_factor + (1.0 - floor_factor) * cos
-
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+from fluke_model.training_utils import build_scheduler, select_device  # noqa: E402
 
 
 def tiny_overfit_subset(rows: list[OrcaManifestRow], individuals: int = 3) -> list[OrcaManifestRow]:
@@ -177,7 +133,7 @@ def main() -> int:
 
     loader = DataLoader(dataset, batch_sampler=sampler, num_workers=0)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    scheduler = _build_scheduler(
+    scheduler = build_scheduler(
         optimizer,
         kind=args.scheduler,
         epochs=args.epochs,

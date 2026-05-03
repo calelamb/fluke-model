@@ -57,6 +57,9 @@ def save_cached_features(path: str | Path, cache: CachedFeatures) -> None:
 
 
 def load_cached_features(path: str | Path) -> CachedFeatures:
+    # allow_pickle=True is required because `paths` is saved as a dtype=object
+    # NumPy array of Python strings. The cache file is locally produced by
+    # cache_miewid_features.py; do not load caches from untrusted sources.
     raw = np.load(path, allow_pickle=True)
     return CachedFeatures(
         paths=list(raw["paths"]),
@@ -127,8 +130,12 @@ class MLPHead(nn.Module):
         return F.normalize(self.net(x), dim=-1)
 
 
-def build_head(kind: str, **kwargs) -> nn.Module:
-    """Factory for head architectures."""
+def build_head(kind: str, **kwargs: int | float | bool) -> nn.Module:
+    """Factory for head architectures.
+
+    Accepted kwargs match the constructors of `LinearHead` and `MLPHead`:
+    `in_features`, `embed_dim`, plus `hidden_dim`, `dropout`, `use_bn` for MLP.
+    """
     if kind == "linear":
         return LinearHead(**kwargs)
     if kind == "mlp":

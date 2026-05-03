@@ -49,16 +49,7 @@ from fluke_model.miewid_finetune import (  # noqa: E402
 from fluke_model.orca_data import OrcaManifestRow, manifest_stats, read_jsonl_manifest  # noqa: E402
 from fluke_model.retrieval_eval import evaluate_retrieval  # noqa: E402
 from fluke_model.trainable import BalancedBatchSampler, batch_hard_triplet_loss  # noqa: E402
-
-
-def select_device(name: str) -> torch.device:
-    if name != "auto":
-        return torch.device(name)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+from fluke_model.training_utils import build_scheduler, select_device  # noqa: E402
 
 
 def evaluate_head(
@@ -166,7 +157,7 @@ def main() -> int:
 
     loader = DataLoader(dataset, batch_sampler=sampler, num_workers=0)
     optimizer = torch.optim.AdamW(head.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = _build_scheduler(
+    scheduler = build_scheduler(
         optimizer,
         kind=args.scheduler,
         epochs=args.epochs,
@@ -250,9 +241,10 @@ def main() -> int:
 
     test_metrics: dict = {}
     if test_rows:
-        # Reload best head before final test eval
+        # Reload best head before final test eval. weights_only=False because the
+        # checkpoint payload includes a non-tensor metadata dict (head_kind, dims).
         if checkpoint_path.exists():
-            payload = torch.load(checkpoint_path, map_location=device)
+            payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
             head.load_state_dict(payload["head_state"])
         test_report = evaluate_head(
             head,
@@ -300,36 +292,6 @@ def main() -> int:
             f"mrr={test_metrics.get('mrr', 0):.3f}"
         )
     return 0
-
-
-def _build_scheduler(
-    optimizer: torch.optim.Optimizer,
-    *,
-    kind: str,
-    epochs: int,
-    warmup_epochs: int,
-    base_lr: float,
-    min_lr: float,
-) -> torch.optim.lr_scheduler.LRScheduler | None:
-    """Linear-warmup + cosine-decay schedule. Mirrors train_embedder.py."""
-    if kind == "none":
-        return None
-
-    import math
-
-    warmup = max(0, min(warmup_epochs, epochs - 1))
-    decay_span = max(1, epochs - warmup)
-    floor_factor = min_lr / base_lr if base_lr > 0 else 0.0
-
-    def lr_lambda(epoch_idx: int) -> float:
-        if warmup > 0 and epoch_idx < warmup:
-            return float(epoch_idx + 1) / float(warmup)
-        progress = (epoch_idx - warmup) / decay_span
-        progress = min(1.0, max(0.0, progress))
-        cos = 0.5 * (1.0 + math.cos(math.pi * progress))
-        return floor_factor + (1.0 - floor_factor) * cos
-
-    return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
 
 
 if __name__ == "__main__":

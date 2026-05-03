@@ -1,8 +1,7 @@
-"""Tests for the LR schedule helper used by train_embedder.py."""
+"""Tests for the shared LR schedule helper used by training scripts."""
 
 from __future__ import annotations
 
-import importlib.util
 import math
 import sys
 from pathlib import Path
@@ -11,23 +10,11 @@ import pytest
 import torch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = REPO_ROOT / "scripts" / "train_embedder.py"
 SRC = REPO_ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-
-def _load_train_module():
-    spec = importlib.util.spec_from_file_location("train_embedder_mod", SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-@pytest.fixture(scope="module")
-def train_module():
-    return _load_train_module()
+from fluke_model.training_utils import build_scheduler, select_device  # noqa: E402
 
 
 def _make_optimizer(lr: float = 3e-4) -> torch.optim.Optimizer:
@@ -35,8 +22,8 @@ def _make_optimizer(lr: float = 3e-4) -> torch.optim.Optimizer:
     return torch.optim.AdamW(model.parameters(), lr=lr)
 
 
-def test_scheduler_none_returns_none(train_module):
-    sch = train_module._build_scheduler(
+def test_scheduler_none_returns_none():
+    sch = build_scheduler(
         _make_optimizer(),
         kind="none",
         epochs=10,
@@ -47,11 +34,11 @@ def test_scheduler_none_returns_none(train_module):
     assert sch is None
 
 
-def test_warmup_then_cosine_decay(train_module):
+def test_warmup_then_cosine_decay():
     base_lr = 3e-4
     min_lr = 1e-6
     optimizer = _make_optimizer(base_lr)
-    sch = train_module._build_scheduler(
+    sch = build_scheduler(
         optimizer,
         kind="cosine",
         epochs=20,
@@ -85,10 +72,10 @@ def test_warmup_then_cosine_decay(train_module):
     assert lrs[-1] <= base_lr / 10
 
 
-def test_zero_warmup_starts_at_peak(train_module):
+def test_zero_warmup_starts_at_peak():
     base_lr = 3e-4
     optimizer = _make_optimizer(base_lr)
-    sch = train_module._build_scheduler(
+    sch = build_scheduler(
         optimizer,
         kind="cosine",
         epochs=10,
@@ -100,11 +87,11 @@ def test_zero_warmup_starts_at_peak(train_module):
     assert optimizer.param_groups[0]["lr"] == pytest.approx(base_lr, rel=1e-6)
 
 
-def test_warmup_clamped_to_epochs(train_module):
+def test_warmup_clamped_to_epochs():
     """If warmup_epochs >= epochs, the scheduler should not blow up."""
     base_lr = 3e-4
     optimizer = _make_optimizer(base_lr)
-    sch = train_module._build_scheduler(
+    sch = build_scheduler(
         optimizer,
         kind="cosine",
         epochs=2,
@@ -113,9 +100,19 @@ def test_warmup_clamped_to_epochs(train_module):
         min_lr=1e-6,
     )
     assert sch is not None
-    # Should not raise across the configured epoch count.
     for _ in range(2):
         sch.step()
     final_lr = optimizer.param_groups[0]["lr"]
     assert math.isfinite(final_lr)
     assert final_lr > 0
+
+
+def test_select_device_explicit_cpu():
+    """Explicit device names bypass the auto resolver."""
+    assert select_device("cpu") == torch.device("cpu")
+
+
+def test_select_device_auto_returns_real_device():
+    """`auto` must resolve to one of cuda/mps/cpu without error."""
+    device = select_device("auto")
+    assert device.type in {"cuda", "mps", "cpu"}
