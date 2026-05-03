@@ -1,0 +1,196 @@
+{
+  "run_name": "miewid-mlp-512-256-001",
+  "checkpoint": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/artifacts/heads/miewid/miewid-mlp-512-256-001/head.pt",
+  "embedder": "miewid-msv3",
+  "head": "mlp",
+  "head_kwargs": {
+    "in_features": 2152,
+    "embed_dim": 256,
+    "hidden_dim": 512,
+    "dropout": 0.1,
+    "use_bn": true
+  },
+  "splits_dir": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/data/manifests/orca_all_splits",
+  "split_seed": 42,
+  "train_stats": {
+    "rows": 676,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 281,
+      "killer_whale": 395
+    },
+    "images_per_individual": {
+      "min": 11,
+      "max": 31,
+      "median": 17
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "val_stats": {
+    "rows": 144,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 54,
+      "killer_whale": 90
+    },
+    "images_per_individual": {
+      "min": 2,
+      "max": 7,
+      "median": 4
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "test_stats": {
+    "rows": 144,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 54,
+      "killer_whale": 90
+    },
+    "images_per_individual": {
+      "min": 2,
+      "max": 7,
+      "median": 4
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.2780626654624939,
+      "lr": 0.0004,
+      "val_metrics": {
+        "top_1": 0.8263888888888888,
+        "top_3": 0.8958333333333334,
+        "top_5": 0.9236111111111112,
+        "mrr": 0.8708914542247875
+      }
+    },
+    {
+      "epoch": 2,
+      "loss": 0.06913893073797225,
+      "lr": 0.0006,
+      "val_metrics": {
+        "top_1": 0.8263888888888888,
+        "top_3": 0.8888888888888888,
+        "top_5": 0.9444444444444444,
+        "mrr": 0.8773203262786596
+      }
+    },
+    {
+      "epoch": 3,
+      "loss": 0.00960084805265069,
+      "lr": 0.0008,
+      "val_metrics": {
+        "top_1": 0.8194444444444444,
+        "top_3": 0.8888888888888888,
+        "top_5": 0.9444444444444444,
+        "mrr": 0.8710345017636685
+      }
+    },
+    {
+      "epoch": 4,
+      "loss": 0.0002446732483804226,
+      "lr": 0.001,
+      "val_metrics": {
+        "top_1": 0.7986111111111112,
+        "top_3": 0.9097222222222222,
+        "top_5": 0.9513888888888888,
+        "mrr": 0.8596533289241622
+      }
+    },
+    {
+      "epoch": 5,
+      "loss": 0.0009949993342161178,
+      "lr": 0.001,
+      "val_metrics": {
+        "top_1": 0.7986111111111112,
+        "top_3": 0.8611111111111112,
+        "top_5": 0.9305555555555556,
+        "mrr": 0.8473023889690556
+      }
+    },
+    {
+      "epoch": 6,
+      "loss": 0.0,
+      "lr": 0.0009991853674111047,
+      "val_metrics": {
+        "top_1": 0.7986111111111112,
+        "top_3": 0.8611111111111112,
+        "top_5": 0.9305555555555556,
+        "mrr": 0.847684761226428
+      }
+    },
+    {
+      "epoch": 7,
+      "loss": 0.0,
+      "lr": 0.0009967441268066007,
+      "val_metrics": {
+        "top_1": 0.8055555555555556,
+        "top_3": 0.875,
+        "top_5": 0.9236111111111112,
+        "mrr": 0.8533588132546467
+      }
+    },
+    {
+      "epoch": 8,
+      "loss": 4.396820440888405e-05,
+      "lr": 0.0009926842410059227,
+      "val_metrics": {
+        "top_1": 0.8125,
+        "top_3": 0.8819444444444444,
+        "top_5": 0.9236111111111112,
+        "mrr": 0.8569304923471592
+      }
+    },
+    {
+      "epoch": 9,
+      "loss": 0.0,
+      "lr": 0.0009870189525126958,
+      "val_metrics": {
+        "top_1": 0.7986111111111112,
+        "top_3": 0.875,
+        "top_5": 0.9305555555555556,
+        "mrr": 0.8509172347714015
+      }
+    },
+    {
+      "epoch": 10,
+      "loss": 0.00012672403827309608,
+      "lr": 0.0009797667403204416,
+      "val_metrics": {
+        "top_1": 0.7916666666666666,
+        "top_3": 0.8611111111111112,
+        "top_5": 0.9097222222222222,
+        "mrr": 0.8436838624338624
+      }
+    },
+    {
+      "epoch": 11,
+      "loss": 0.0,
+      "lr": 0.0009709512596379427,
+      "val_metrics": {
+        "top_1": 0.8125,
+        "top_3": 0.8680555555555556,
+        "top_5": 0.9166666666666666,
+        "mrr": 0.8564975919142586
+      }
+    }
+  ],
+  "best_val_top_1": 0.8263888888888888,
+  "test_metrics": {
+    "top_1": 0.7986111111111112,
+    "top_3": 0.8958333333333334,
+    "top_5": 0.9305555555555556,
+    "mrr": 0.8554407687220187
+  },
+  "stopped_early": true,
+  "scheduler": "cosine",
+  "warmup_epochs": 5,
+  "early_stop_patience": 10,
+  "wall_clock_seconds": 7.3690431118011475,
+  "completed_at": "2026-05-03T22:46:43.446783+00:00"
+}

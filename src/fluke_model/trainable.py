@@ -199,7 +199,10 @@ def save_checkpoint(
 
 
 def load_checkpoint(path: str | Path, device: torch.device) -> tuple[EmbedderNet, dict]:
-    payload = torch.load(path, map_location=device)
+    # weights_only=False: the checkpoint payload intentionally includes a
+    # non-tensor metadata dict (backbone, embed_dim, etc.). PyTorch >= 2.6
+    # changes the default to True, which would reject this payload.
+    payload = torch.load(path, map_location=device, weights_only=False)
     metadata = payload["metadata"]
     model = EmbedderNet(
         backbone=metadata["backbone"],

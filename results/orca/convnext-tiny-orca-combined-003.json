@@ -1,0 +1,114 @@
+{
+  "run_name": "convnext-tiny-orca-combined-003",
+  "checkpoint": "/Users/calelamb/Desktop/personal projects/orcawatch/fluke-model/artifacts/models/orca/convnext-tiny-orca-combined-003/model.pt",
+  "backbone": "convnext_tiny",
+  "embed_dim": 256,
+  "image_size": 224,
+  "dataset": "happywhale_orca",
+  "split_seed": 42,
+  "train_stats": {
+    "rows": 676,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 281,
+      "killer_whale": 395
+    },
+    "images_per_individual": {
+      "min": 11,
+      "max": 31,
+      "median": 17
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "val_stats": {
+    "rows": 144,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 54,
+      "killer_whale": 90
+    },
+    "images_per_individual": {
+      "min": 2,
+      "max": 7,
+      "median": 4
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "history": [
+    {
+      "epoch": 1,
+      "loss": 0.5506665536335537,
+      "lr": 0.0003,
+      "val_metrics": {
+        "top_1": 0.3611111111111111,
+        "top_3": 0.5694444444444444,
+        "top_5": 0.6944444444444444,
+        "mrr": 0.502383254114259
+      }
+    },
+    {
+      "epoch": 2,
+      "loss": 0.48181783301489695,
+      "lr": 0.0003,
+      "val_metrics": {
+        "top_1": 0.3194444444444444,
+        "top_3": 0.5486111111111112,
+        "top_5": 0.6666666666666666,
+        "mrr": 0.47865987823498823
+      }
+    },
+    {
+      "epoch": 3,
+      "loss": 0.4044536224433354,
+      "lr": 0.0002977287590753251,
+      "val_metrics": {
+        "top_1": 0.2847222222222222,
+        "top_3": 0.5,
+        "top_5": 0.6388888888888888,
+        "mrr": 0.4412783289468342
+      }
+    },
+    {
+      "epoch": 4,
+      "loss": 0.31685511980737957,
+      "lr": 0.00029098404680749326,
+      "val_metrics": {
+        "top_1": 0.22916666666666666,
+        "top_3": 0.4583333333333333,
+        "top_5": 0.6319444444444444,
+        "mrr": 0.4025517210413048
+      }
+    },
+    {
+      "epoch": 5,
+      "loss": 0.3425108002764838,
+      "lr": 0.00027997079786577355,
+      "val_metrics": {
+        "top_1": 0.2777777777777778,
+        "top_3": 0.4722222222222222,
+        "top_5": 0.5763888888888888,
+        "mrr": 0.4193168967565901
+      }
+    },
+    {
+      "epoch": 6,
+      "loss": 0.4553444193942206,
+      "lr": 0.00026502364424628715,
+      "val_metrics": {
+        "top_1": 0.2569444444444444,
+        "top_3": 0.4791666666666667,
+        "top_5": 0.5694444444444444,
+        "mrr": 0.4132887134878558
+      }
+    }
+  ],
+  "best_top_1": 0.3611111111111111,
+  "stopped_early": true,
+  "scheduler": "cosine",
+  "warmup_epochs": 2,
+  "early_stop_patience": 5,
+  "wall_clock_seconds": 210.90984797477722,
+  "completed_at": "2026-05-03T22:36:09.658385+00:00"
+}

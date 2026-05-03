@@ -35,16 +35,7 @@ from fluke_model.trainable import (  # noqa: E402
     embed_rows,
     save_checkpoint,
 )
-
-
-def select_device(name: str) -> torch.device:
-    if name != "auto":
-        return torch.device(name)
-    if torch.cuda.is_available():
-        return torch.device("cuda")
-    if torch.backends.mps.is_available():
-        return torch.device("mps")
-    return torch.device("cpu")
+from fluke_model.training_utils import build_scheduler, select_device  # noqa: E402
 
 
 def tiny_overfit_subset(rows: list[OrcaManifestRow], individuals: int = 3) -> list[OrcaManifestRow]:
@@ -86,10 +77,14 @@ def main() -> int:
     parser.add_argument("--backbone", default="resnet50", help="Any timm image model, e.g. resnet50 or convnext_tiny.")
     parser.add_argument("--embed-dim", type=int, default=256)
     parser.add_argument("--image-size", type=int, default=224)
-    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=20)
     parser.add_argument("--identities-per-batch", type=int, default=4)
     parser.add_argument("--images-per-identity", type=int, default=2)
     parser.add_argument("--lr", type=float, default=3e-4)
+    parser.add_argument("--min-lr", type=float, default=1e-6, help="Cosine schedule floor.")
+    parser.add_argument("--warmup-epochs", type=int, default=2, help="Linear LR warmup before cosine decay.")
+    parser.add_argument("--scheduler", choices=["cosine", "none"], default="cosine")
+    parser.add_argument("--early-stop-patience", type=int, default=5, help="Stop if val Top-1 hasn't improved in N epochs.")
     parser.add_argument("--margin", type=float, default=0.2)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--device", default="auto")
@@ -138,10 +133,19 @@ def main() -> int:
 
     loader = DataLoader(dataset, batch_sampler=sampler, num_workers=0)
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    scheduler = build_scheduler(
+        optimizer,
+        kind=args.scheduler,
+        epochs=args.epochs,
+        warmup_epochs=args.warmup_epochs,
+        base_lr=args.lr,
+        min_lr=args.min_lr,
+    )
 
     started = time.time()
     history: list[dict] = []
     best_top1 = -1.0
+    epochs_since_best = 0
     run_name = args.run_name or f"{args.backbone}-{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     checkpoint_path = Path(args.out_dir) / run_name / "model.pt"
 
@@ -155,6 +159,7 @@ def main() -> int:
         num_train_individuals=manifest_stats(train_rows)["individuals"],
     )
 
+    stopped_early = False
     for epoch in range(1, args.epochs + 1):
         model.train()
         losses: list[float] = []
@@ -170,6 +175,10 @@ def main() -> int:
             losses.append(float(loss.item()))
             pbar.set_postfix(loss=f"{sum(losses) / len(losses):.4f}")
 
+        if scheduler is not None:
+            scheduler.step()
+        current_lr = optimizer.param_groups[0]["lr"]
+
         val_report = run_validation(
             model,
             train_rows,
@@ -182,14 +191,26 @@ def main() -> int:
         epoch_report = {
             "epoch": epoch,
             "loss": sum(losses) / max(len(losses), 1),
+            "lr": current_lr,
             "val_metrics": metrics,
         }
         history.append(epoch_report)
         top1 = metrics.get("top_1", -1.0)
-        if top1 >= best_top1:
+        if top1 > best_top1:
             best_top1 = top1
+            epochs_since_best = 0
             save_checkpoint(checkpoint_path, model, metadata, epoch=epoch, metrics=metrics)
+        else:
+            epochs_since_best += 1
         print(json.dumps(epoch_report, indent=2))
+
+        if val_rows and args.early_stop_patience > 0 and epochs_since_best >= args.early_stop_patience:
+            print(
+                f"Early stop: val top_1 has not improved for {args.early_stop_patience} epochs "
+                f"(best={best_top1:.4f} at epoch {epoch - epochs_since_best})."
+            )
+            stopped_early = True
+            break
 
     report = {
         "run_name": run_name,
@@ -202,6 +223,11 @@ def main() -> int:
         "train_stats": manifest_stats(train_rows),
         "val_stats": manifest_stats(val_rows),
         "history": history,
+        "best_top_1": best_top1,
+        "stopped_early": stopped_early,
+        "scheduler": args.scheduler,
+        "warmup_epochs": args.warmup_epochs,
+        "early_stop_patience": args.early_stop_patience,
         "wall_clock_seconds": time.time() - started,
         "completed_at": datetime.now(timezone.utc).isoformat(),
     }
