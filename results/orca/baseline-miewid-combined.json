@@ -1,0 +1,54 @@
+{
+  "dataset": "happywhale_orca",
+  "splits_dir": "data/manifests/orca_all_splits",
+  "train_stats": {
+    "rows": 676,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 281,
+      "killer_whale": 395
+    },
+    "images_per_individual": {
+      "min": 11,
+      "max": 31,
+      "median": 17
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "test_stats": {
+    "rows": 144,
+    "individuals": 45,
+    "species": {
+      "kiler_whale": 54,
+      "killer_whale": 90
+    },
+    "images_per_individual": {
+      "min": 2,
+      "max": 7,
+      "median": 4
+    },
+    "individuals_with_1_image": 0,
+    "individuals_with_2_plus_images": 45
+  },
+  "results": [
+    {
+      "n_reference_images": 676,
+      "n_query_images": 144,
+      "n_reference_individuals": 45,
+      "n_query_individuals": 45,
+      "metrics": {
+        "top_1": 0.8263888888888888,
+        "top_3": 0.9027777777777778,
+        "top_5": 0.9305555555555556,
+        "mrr": 0.8751068761485429
+      },
+      "model": "miewid-msv3",
+      "metadata": {
+        "embedder": "miewid-msv3",
+        "embed_dim": 2152
+      }
+    }
+  ],
+  "completed_at": "2026-05-03T22:25:38.619461+00:00"
+}

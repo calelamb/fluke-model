@@ -4,11 +4,19 @@ Model workspace for the [Fluke](../fluke) orca photo-identification project.
 
 The current workspace has two tracks:
 
-1. **Frozen embedder baseline** — evaluate MiewID-msv3 and DINO embedders without
-   training.
-2. **Public orca training path** — train a beginner-friendly metric-learning
-   model on official public dataset releases, starting with Happywhale/Kaggle
-   filtered to killer whale/orca rows.
+1. **Frozen embedder baseline (V1, shipped)** — MiewID-msv3 evaluated on the
+   combined HappyWhale + FinID-20 orca split. Hits **82.6% Top-1 / MRR 0.875**
+   on the held-out test split. Served behind `scripts/serve_identifier.py`.
+2. **MiewID fine-tuning track (V1.5 candidate)** — fine-tune MiewID on combined
+   public-orca data. M3 Pro hits a ceiling at the frozen baseline; full backbone
+   fine-tune with ArcFace at 440×440 needs the BYU GPU lab. See
+   [`docs/byu-gpu-finetuning-plan.md`](docs/byu-gpu-finetuning-plan.md).
+
+> **Historical note:** an earlier track tried from-scratch ResNet-50 / ConvNeXt
+> training. That topped out around 36% Top-1 — far below MiewID — and is
+> retained as research artifacts only. See
+> [`docs/training-pass-003-and-miewid-finetune.md`](docs/training-pass-003-and-miewid-finetune.md)
+> for the full breakdown.
 
 The important boundary: this project does **not** train on random scraped photos
 from Google Images, social media, ID guide PDFs, researcher catalogs, or whale
@@ -34,15 +42,22 @@ fluke-model/
     trainable.py          # trainable embedding model + triplet loss
     retrieval_eval.py     # closed-set retrieval evaluation
   scripts/
-    download_beluga.py   # idempotent dataset download
-    embed_catalog.py     # embed a manifest -> FAISS index
-    identify.py          # query the index with a single image
-    evaluate.py          # leave-one-out validation, writes results/<name>-eval.json
-    download_happywhale.py    # official Kaggle download path
-    build_orca_manifest.py    # filter Happywhale to killer whale/orca rows
-    split_manifest.py         # train/val/test image splits by individual
-    train_embedder.py         # local metric-learning training loop
-    evaluate_orca.py          # compare trained model vs MiewID on same split
+    download_beluga.py             # idempotent dataset download
+    download_happywhale.py         # official Kaggle download path
+    download_finid20.py            # FinID-20 (Zenodo, CC-BY-4.0) download
+    embed_catalog.py               # embed a manifest -> FAISS index
+    identify.py                    # query the index with a single image
+    evaluate.py                    # leave-one-out validation
+    build_orca_manifest.py         # filter Happywhale to killer whale/orca rows
+    build_finid20_manifest.py      # convert FinID-20 cropped images to OrcaManifestRow JSONL
+    build_combined_orca_manifest.py # concatenate per-source orca manifests
+    split_manifest.py              # train/val/test image splits by individual
+    train_embedder.py              # local metric-learning training loop
+    evaluate_orca.py               # compare trained model vs MiewID on same split
+    cache_miewid_features.py       # pre-compute MiewID embeddings (one-time)
+    finetune_miewid_head.py        # train a head on cached MiewID features (M3 Pro path)
+    serve_identifier.py            # FastAPI service hosting the frozen MiewID identifier
+    build_reference_index.py       # build FAISS reference index for the identifier service
   tests/                 # pytest unit tests (metrics + index round-trip)
   data/                  # gitignored datasets and indices
   artifacts/             # gitignored trained checkpoints
@@ -73,84 +88,102 @@ uv run python scripts/evaluate.py --embedder miewid-msv3 --subset 100
 Each `evaluate.py` run writes `results/<embedder>-eval.json` and appends to
 `results/summary.md`.
 
-## Public orca training path
+## Combined public-orca pipeline
 
-This is the first real training loop for Fluke. It uses the Happywhale Whale and
-Dolphin Identification dataset through the official Kaggle access path, then
-filters to killer whale/orca images.
+Two licensed sources are stitched into a single closed-set training pipeline:
 
-### 1. Prepare Kaggle access
+- **HappyWhale** (Kaggle competition release, terms-restricted) — 914 orca rows
+  out of the full Whale and Dolphin Identification dataset
+- **FinID-20** (Zenodo `10.5281/zenodo.16786268`, CC-BY-4.0) — 500 cropped
+  Bigg's killer whale dorsal-fin images, 20 individuals × 25 photos each
+
+> **Source policy:** no random scraped photos. Every image must come from a
+> dataset with explicit licensing terms permitting ML training. Public
+> visibility is not permission.
+
+### 1. Prepare Kaggle access (HappyWhale only)
 
 1. Create a Kaggle API token from `https://www.kaggle.com/settings`.
 2. Save it as `~/.kaggle/kaggle.json`, or export `KAGGLE_USERNAME` and
    `KAGGLE_KEY`.
 3. Open the Happywhale dataset/competition page in Kaggle and accept the terms.
 
-### 2. Download and build manifests
+### 2. Download and build the combined manifest
 
 ```bash
 uv sync
 uv run python scripts/download_happywhale.py
+uv run python scripts/download_finid20.py
 uv run python scripts/build_orca_manifest.py
-uv run python scripts/split_manifest.py
+uv run python scripts/build_finid20_manifest.py
+uv run python scripts/build_combined_orca_manifest.py
+uv run python scripts/split_manifest.py \
+    --manifest data/manifests/orca_all.jsonl \
+    --out-dir data/manifests/orca_all_splits \
+    --min-images-per-individual 5
 ```
 
-Outputs:
+Outputs (all gitignored):
 
-- raw Happywhale files: `data/happywhale/` (gitignored)
-- orca-only manifest: `data/manifests/happywhale_orca.jsonl` (gitignored)
-- closed-set splits: `data/manifests/happywhale_orca_splits/` (gitignored)
+- raw HappyWhale files: `data/happywhale/`
+- raw FinID-20 files: `data/finid-20/raw/`
+- per-source manifests: `data/manifests/happywhale_orca.jsonl`,
+  `data/manifests/finid20_orca.jsonl`
+- combined manifest: `data/manifests/orca_all.jsonl`
+- closed-set splits: `data/manifests/orca_all_splits/` (676 train / 144 val /
+  144 test, 45 individuals)
 
-The split script drops individuals with too few images for closed-set eval and
-guarantees no image path appears in more than one split.
-
-### 3. First local training run
-
-Start small. This is educational first; accuracy comes after the loop is solid.
+### 3. Frozen MiewID baseline (V1)
 
 ```bash
-# Tiny sanity run: can the model overfit a few repeated IDs?
-uv run python scripts/train_embedder.py --overfit-tiny --epochs 3 --no-pretrained
+uv run python scripts/evaluate_orca.py \
+    --splits-dir data/manifests/orca_all_splits \
+    --out results/orca/baseline-miewid-combined.json
+```
 
-# First real local run on the public orca split
+Latest numbers on combined test: **82.6% Top-1 / 90.3% Top-3 / MRR 0.875**.
+
+### 4. M3 Pro fine-tune track (cached features)
+
+Pre-cache MiewID's 2152-dim features once, then iterate quickly on a learnable
+head:
+
+```bash
+# 4-minute one-time cache (CPU)
+uv run python scripts/cache_miewid_features.py \
+    --manifest data/manifests/orca_all.jsonl \
+    --out artifacts/miewid_features/orca_all.npz
+
+# Train an MLP head on cached features
+uv run python scripts/finetune_miewid_head.py \
+    --features artifacts/miewid_features/orca_all.npz \
+    --splits-dir data/manifests/orca_all_splits \
+    --head mlp --hidden-dim 512 --embed-dim 256 \
+    --epochs 60 --warmup-epochs 5 --early-stop-patience 10 \
+    --identities-per-batch 8 --images-per-identity 4 \
+    --run-name miewid-mlp-head-001
+```
+
+Empirically, head fine-tuning on this ~676-image train set does **not**
+generalise past frozen MiewID. The realistic upgrade path is the BYU GPU lab —
+see [`docs/byu-gpu-finetuning-plan.md`](docs/byu-gpu-finetuning-plan.md) for
+the full backbone + ArcFace fine-tune approach.
+
+### 5. From-scratch training (research only)
+
+`scripts/train_embedder.py` runs the original from-scratch ResNet-50 /
+ConvNeXt-Tiny pipeline with the new cosine LR schedule and early stopping.
+This top-out around 37% Top-1 on combined data — left in the repo as a
+reference baseline for the metric-learning loop, not as a V1 candidate.
+
+```bash
 uv run python scripts/train_embedder.py \
-  --backbone resnet50 \
-  --epochs 3 \
-  --identities-per-batch 4 \
-  --images-per-identity 2
+    --splits-dir data/manifests/orca_all_splits \
+    --backbone resnet50 --epochs 20 \
+    --warmup-epochs 2 --early-stop-patience 5 \
+    --identities-per-batch 6 --images-per-identity 4 \
+    --run-name resnet50-orca-combined-XXX
 ```
-
-The training script writes:
-
-- checkpoint: `artifacts/models/orca/<run-name>/model.pt` (gitignored)
-- metrics and training history: `results/orca/<run-name>.json`
-
-### 4. Compare against MiewID
-
-Evaluate MiewID and the trained checkpoint on the exact same orca split:
-
-```bash
-uv run python scripts/evaluate_orca.py \
-  --trained-checkpoint artifacts/models/orca/<run-name>/model.pt
-```
-
-Results are written to `results/orca/evaluation.json` and appended to
-`results/orca/summary.md`.
-
-For a checkpoint-only smoke test that does not load MiewID:
-
-```bash
-uv run python scripts/evaluate_orca.py \
-  --skip-baseline \
-  --trained-checkpoint artifacts/models/orca/<run-name>/model.pt
-```
-
-Decision rule:
-
-- If the trained model beats MiewID on the orca test split, it becomes the V1
-  candidate.
-- If it does not, MiewID remains the production fallback and the trained model
-  remains the learning track.
 
 ## Data rules
 
