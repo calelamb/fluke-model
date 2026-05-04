@@ -56,6 +56,16 @@ def load_image_from_base64(data: str) -> Image.Image:
 
 
 def load_image_from_url(url: str, timeout: float = 20.0) -> Image.Image:
+    """Load an image from a URL.
+
+    Supports `http(s)://` and `file://` schemes. The `file://` path is meant
+    for dev/demo mode where reference photos live on the local filesystem;
+    production references live behind authenticated object-storage URLs.
+    """
+    if url.startswith("file://"):
+        local_path = url[len("file://") :]
+        with open(local_path, "rb") as f:
+            return load_image_from_bytes(f.read())
     response = requests.get(url, timeout=timeout)
     response.raise_for_status()
     return load_image_from_bytes(response.content)
