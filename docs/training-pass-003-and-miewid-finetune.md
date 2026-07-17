@@ -99,7 +99,8 @@ frozen MiewID** on this scale of data.
 
 ## Decision
 
-- **V1 stays MiewID frozen.** Already shipped via `serve_identifier.py`.
+- **Historical result only:** the frozen MiewID baseline was not production-rights cleared and is
+  not executable in the launch service. The rights-gated DINOv2 service is now authoritative.
 - **Local training track is reframed** as MiewID fine-tuning, not from-scratch.
 - **From-scratch ResNet-50 / ConvNeXt artifacts are research-only.** They are
   not candidates for V1.

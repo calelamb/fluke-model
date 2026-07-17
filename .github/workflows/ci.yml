@@ -1,0 +1,63 @@
+name: Model CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install uv==0.11.8
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run pytest --cov=src/fluke_model --cov-report=term-missing --cov-fail-under=80
+      - run: uv run bandit -q -lll -r src scripts
+      - run: uv run pip-audit --skip-editable
+      - run: docker build --tag fluke-model:ci .
+      - name: Build rights-attested synthetic readiness index
+        run: |
+          mkdir --mode=777 .ci-index
+          docker run --rm \
+            --volume "$PWD/.ci-index:/reference-index" \
+            fluke-model:ci \
+            uv run --no-sync python scripts/build_ci_reference_index.py \
+              --out-dir /reference-index \
+              --artifact-dir /app/model-artifact
+      - name: Start ready service
+        run: |
+          docker run --detach --rm --name fluke-model \
+            -e FLUKE_MODEL_API_KEY=ci-service-key-that-is-longer-than-thirty-two \
+            -e FLUKE_REFERENCE_ALLOWED_HOSTS=images.example.org \
+            -e FLUKE_REFERENCE_INDEX_DIR=/reference-index \
+            --volume "$PWD/.ci-index:/reference-index" \
+            -p 4100:4100 fluke-model:ci
+      - name: Verify liveness, real readiness, and inference
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4100/health; then break; fi
+            sleep 1
+          done
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:4100/ready; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:4100/ready
+          curl --fail --silent \
+            -H 'X-Fluke-Model-Key: ci-service-key-that-is-longer-than-thirty-two' \
+            -F 'file=@.ci-index/ci-query.jpg;type=image/jpeg' \
+            http://127.0.0.1:4100/identify \
+            | python -c 'import json,sys; result=json.load(sys.stdin); assert result["confidenceSemantics"] == "uncalibrated_similarity_not_probability"'
+      - if: always()
+        run: |
+          docker logs fluke-model || true
+          docker stop fluke-model || true

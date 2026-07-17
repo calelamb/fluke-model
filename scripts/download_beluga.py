@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import stat
 import sys
 import urllib.request
 import zipfile
@@ -34,7 +35,6 @@ DATASET_URL = "https://storage.googleapis.com/public-datasets-lila/wild-me/belug
 DATASET_MIRRORS = [
     "https://storage.googleapis.com/public-datasets-lila/wild-me/beluga.coco.tar.gz",
     "https://lilawildlife.blob.core.windows.net/lila-wildlife/wild-me/beluga.coco.tar.gz",
-    "http://us-west-2.opendata.source.coop.s3.amazonaws.com/agentmorris/lila-wildlife/wild-me/beluga.coco.tar.gz",
 ]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -53,7 +53,9 @@ def download_with_progress(url: str, dest: Path) -> None:
             mb = (blocks_done * block_size) // (1024 * 1024)
             print(f"\r  {pct}% ({mb} MB)", end="", flush=True)
 
-    urllib.request.urlretrieve(url, dest, _hook)
+    if not url.startswith("https://"):
+        raise ValueError("dataset URL must use HTTPS")
+    urllib.request.urlretrieve(url, dest, _hook)  # nosec B310
     print()
 
 
@@ -62,12 +64,20 @@ def extract_archive(archive_path: Path, dest_dir: Path) -> None:
     print(f"  extracting {archive_path.name} -> {dest_dir}")
     if archive_path.suffix == ".zip":
         with zipfile.ZipFile(archive_path) as zf:
+            for member in zf.infolist():
+                path = Path(member.filename)
+                if (
+                    path.is_absolute()
+                    or ".." in path.parts
+                    or stat.S_ISLNK(member.external_attr >> 16)
+                ):
+                    raise ValueError(f"unsafe archive member: {member.filename}")
             zf.extractall(dest_dir)
     elif archive_path.name.endswith(".tar.gz") or archive_path.suffix in (".tgz", ".gz"):
         import tarfile
 
         with tarfile.open(archive_path, "r:gz") as tf:
-            tf.extractall(dest_dir)
+            tf.extractall(dest_dir, filter="data")
     else:
         raise ValueError(f"Unknown archive type: {archive_path}")
 
@@ -152,7 +162,10 @@ def main() -> int:
             download_with_progress(args.url, archive_path)
         except Exception as e:
             print(f"DOWNLOAD FAILED: {e}", file=sys.stderr)
-            print("Recommend running scripts/evaluate.py --synthetic for stub numbers.", file=sys.stderr)
+            print(
+                "Recommend running scripts/evaluate.py --synthetic for stub numbers.",
+                file=sys.stderr,
+            )
             return 2
     else:
         print(f"  archive already present: {archive_path}")

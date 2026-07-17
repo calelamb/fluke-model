@@ -22,6 +22,13 @@ def _make_optimizer(lr: float = 3e-4) -> torch.optim.Optimizer:
     return torch.optim.AdamW(model.parameters(), lr=lr)
 
 
+def _step(
+    optimizer: torch.optim.Optimizer, scheduler: torch.optim.lr_scheduler.LRScheduler
+) -> None:
+    optimizer.step()
+    scheduler.step()
+
+
 def test_scheduler_none_returns_none():
     sch = build_scheduler(
         _make_optimizer(),
@@ -52,18 +59,18 @@ def test_warmup_then_cosine_decay():
     assert optimizer.param_groups[0]["lr"] == pytest.approx(base_lr / 2, rel=1e-6)
 
     # After 1 step: full base lr
-    sch.step()
+    _step(optimizer, sch)
     assert optimizer.param_groups[0]["lr"] == pytest.approx(base_lr, rel=1e-6)
 
     # After 2 steps: still at peak (cosine is at progress=0)
-    sch.step()
+    _step(optimizer, sch)
     assert optimizer.param_groups[0]["lr"] == pytest.approx(base_lr, rel=1e-6)
 
     # Walk through remaining epochs; LR should monotonically decrease and
     # land near (but no lower than) the floor.
     lrs = [optimizer.param_groups[0]["lr"]]
     for _ in range(18):
-        sch.step()
+        _step(optimizer, sch)
         lrs.append(optimizer.param_groups[0]["lr"])
 
     descending = all(lrs[i] >= lrs[i + 1] - 1e-12 for i in range(len(lrs) - 1))
@@ -101,7 +108,7 @@ def test_warmup_clamped_to_epochs():
     )
     assert sch is not None
     for _ in range(2):
-        sch.step()
+        _step(optimizer, sch)
     final_lr = optimizer.param_groups[0]["lr"]
     assert math.isfinite(final_lr)
     assert final_lr > 0

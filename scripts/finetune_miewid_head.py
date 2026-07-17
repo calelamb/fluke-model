@@ -86,9 +86,7 @@ def main() -> int:
     parser.add_argument(
         "--features", default=str(REPO_ROOT / "artifacts/miewid_features/orca_all.npz")
     )
-    parser.add_argument(
-        "--splits-dir", default=str(REPO_ROOT / "data/manifests/orca_all_splits")
-    )
+    parser.add_argument("--splits-dir", default=str(REPO_ROOT / "data/manifests/orca_all_splits"))
     parser.add_argument("--head", choices=["linear", "mlp"], default="mlp")
     parser.add_argument("--hidden-dim", type=int, default=512)
     parser.add_argument("--embed-dim", type=int, default=256)
@@ -133,7 +131,9 @@ def main() -> int:
 
     device = select_device(args.device)
     print(f"Device: {device}")
-    print(f"Train rows: {len(train_rows)} | val rows: {len(val_rows)} | test rows: {len(test_rows)}")
+    print(
+        f"Train rows: {len(train_rows)} | val rows: {len(val_rows)} | test rows: {len(test_rows)}"
+    )
 
     head_kwargs: dict = {"in_features": cache.features.shape[1], "embed_dim": args.embed_dim}
     if args.head == "mlp":
@@ -231,7 +231,11 @@ def main() -> int:
             epochs_since_best += 1
         print(json.dumps(epoch_report))
 
-        if val_rows and args.early_stop_patience > 0 and epochs_since_best >= args.early_stop_patience:
+        if (
+            val_rows
+            and args.early_stop_patience > 0
+            and epochs_since_best >= args.early_stop_patience
+        ):
             print(
                 f"Early stop: val top_1 has not improved for {args.early_stop_patience} epochs "
                 f"(best={best_top1:.4f} at epoch {epoch - epochs_since_best})."
@@ -241,10 +245,9 @@ def main() -> int:
 
     test_metrics: dict = {}
     if test_rows:
-        # Reload best head before final test eval. weights_only=False because the
-        # checkpoint payload includes a non-tensor metadata dict (head_kind, dims).
+        # Reload only tensors and primitive metadata from the locally created checkpoint.
         if checkpoint_path.exists():
-            payload = torch.load(checkpoint_path, map_location=device, weights_only=False)
+            payload = torch.load(checkpoint_path, map_location=device, weights_only=True)
             head.load_state_dict(payload["head_state"])
         test_report = evaluate_head(
             head,

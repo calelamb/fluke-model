@@ -6,19 +6,23 @@ embedders:
     hf_repo: conservationxlabs/miewid-msv3
     image_size: 440
     embed_dim: 2152  # probed at load time; MiewIdNet over EffNetV2-M actually emits 2152-dim
-    license: "model weights public on HF; check repo for usage terms"
-    notes: "EfficientNetV2-M + sub-center ArcFace; trained for animal re-ID across 64 species incl. orca."
+    license: "UNRESOLVED - no production grant recorded"
+    enabled: false
+    notes: "Research result only. Remote-code checkpoint must not run in production."
 
   dinov2-small:
     hf_repo: facebook/dinov2-small
     image_size: 224
     embed_dim: 384
     license: Apache-2.0
-    notes: "ViT-S/14 self-supervised on ~142M images. Plan-of-record per fluke/docs/model.md."
+    revision: ed25f3a31f01632728cabb09d1542f84ab7b0056
+    enabled: true
+    notes: "Only production-enabled backbone; every reference index still requires written data rights."
 
   dinov3-convnext-tiny:
     hf_repo: facebook/dinov3-convnext-tiny-pretrain-lvd1689m
     image_size: 224
     embed_dim: 768
     license: "DINOv3 license (research / non-commercial)"
-    notes: "ConvNeXt-Tiny SSL on 1.7B images (Aug 2025). Free upgrade over DINOv2-S."
+    enabled: false
+    notes: "Research only; excluded from production and the executable registry."
