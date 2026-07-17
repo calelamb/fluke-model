@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
-"""Build a demo-mode reference manifest from licensed orca data.
+"""Build a historical offline research manifest from local orca data.
 
-Demo mode is the V0 of the identifier feature: match user uploads against the
-combined HappyWhale + FinID-20 catalog (45 individuals) so we can ship and
-test the whole pipeline before Salish Sea catalog licensing closes.
+This helper is not a production path and its output must not be deployed.
 
 This script reads `data/manifests/orca_all_splits/train.jsonl` (the train
 portion is treated as the reference catalog) and produces a JSONL manifest in
@@ -11,9 +9,8 @@ the schema that `IdentifierRuntime` / `build_reference_index.py` consume:
 
     {"referencePhotoId", "catalogId", "name", "url", "side", "quality", "crop"}
 
-URLs are emitted as `file://` so the runtime can load images straight from
-disk in dev. Production references live behind authenticated object-storage
-URLs and would skip this script.
+URLs are emitted as `file://` for historical reproducibility. The production
+runtime intentionally rejects them and requires written per-source rights.
 
 The val + test splits are intentionally NOT included in references so they
 can be used as held-out queries when smoke-testing the service.

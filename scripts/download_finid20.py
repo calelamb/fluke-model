@@ -48,7 +48,9 @@ def download_with_progress(url: str, dest: Path) -> None:
             mb = (blocks_done * block_size) // (1024 * 1024)
             print(f"\r  {pct}% ({mb} MB)", end="", flush=True)
 
-    urllib.request.urlretrieve(url, dest, _hook)
+    if not url.startswith("https://"):
+        raise ValueError("dataset URL must use HTTPS")
+    urllib.request.urlretrieve(url, dest, _hook)  # nosec B310
     print()
 
 

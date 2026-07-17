@@ -25,7 +25,9 @@ class OrcaImageDataset(Dataset):
 
     def __init__(self, rows: list[OrcaManifestRow], image_size: int = 224, train: bool = True):
         self.rows = rows
-        self.label_to_idx = {label: i for i, label in enumerate(sorted({r.individual_id for r in rows}))}
+        self.label_to_idx = {
+            label: i for i, label in enumerate(sorted({r.individual_id for r in rows}))
+        }
         self.idx_to_label = {idx: label for label, idx in self.label_to_idx.items()}
         augments: list[transforms.Transform] = [
             transforms.Resize((image_size, image_size)),
@@ -118,7 +120,9 @@ class EmbedderNet(nn.Module):
 
         self.backbone_name = backbone
         self.embed_dim = embed_dim
-        self.backbone = timm.create_model(backbone, pretrained=pretrained, num_classes=0, global_pool="avg")
+        self.backbone = timm.create_model(
+            backbone, pretrained=pretrained, num_classes=0, global_pool="avg"
+        )
         in_features = int(self.backbone.num_features)
         self.projection = nn.Sequential(
             nn.Linear(in_features, embed_dim),
@@ -199,10 +203,7 @@ def save_checkpoint(
 
 
 def load_checkpoint(path: str | Path, device: torch.device) -> tuple[EmbedderNet, dict]:
-    # weights_only=False: the checkpoint payload intentionally includes a
-    # non-tensor metadata dict (backbone, embed_dim, etc.). PyTorch >= 2.6
-    # changes the default to True, which would reject this payload.
-    payload = torch.load(path, map_location=device, weights_only=False)
+    payload = torch.load(path, map_location=device, weights_only=True)
     metadata = payload["metadata"]
     model = EmbedderNet(
         backbone=metadata["backbone"],
