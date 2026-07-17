@@ -24,6 +24,20 @@ jobs:
       - run: uv run bandit -q -lll -r src scripts
       - run: uv run pip-audit --skip-editable
       - run: docker build --tag fluke-model:ci .
+      - name: Start fail-closed service without a catalog
+        run: |
+          docker run --detach --rm --name fluke-model-unready \
+            -e FLUKE_MODEL_API_KEY=ci-service-key-that-is-longer-than-thirty-two \
+            -p 4100:4100 fluke-model:ci
+          trap 'docker stop fluke-model-unready' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4100/health; then break; fi
+            sleep 1
+          done
+          curl --fail --silent http://127.0.0.1:4100/health
+          ready_status="$(curl --silent --output /tmp/unready.json --write-out '%{http_code}' http://127.0.0.1:4100/ready)"
+          test "$ready_status" = "503"
+          python -c 'import json; payload=json.load(open("/tmp/unready.json")); assert payload == {"status":"not_ready","reason":"index_unavailable"}'
       - name: Build rights-attested synthetic readiness index
         run: |
           mkdir --mode=777 .ci-index

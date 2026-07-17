@@ -22,3 +22,11 @@ def test_ci_builds_real_index_and_requires_ready_200() -> None:
     assert "build_ci_reference_index.py" in workflow
     assert "curl --fail --silent http://127.0.0.1:4100/ready" in workflow
     assert 'http://127.0.0.1:4100/ready)" = "503"' not in workflow
+
+
+def test_ci_proves_container_stays_unready_without_attested_catalog() -> None:
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text()
+
+    assert "Start fail-closed service without a catalog" in workflow
+    assert 'test "$ready_status" = "503"' in workflow
+    assert 'assert payload == {"status":"not_ready","reason":"index_unavailable"}' in workflow
