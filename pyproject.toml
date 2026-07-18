@@ -27,6 +27,15 @@ dependencies = [
   "python-multipart>=0.0.31",
 ]
 
+[project.optional-dependencies]
+coreml-export = [
+  "coremltools==9.0",
+  "numpy==2.2.6",
+  "Pillow==12.3.0",
+  "torch==2.13.0",
+  "transformers==5.14.0",
+]
+
 [dependency-groups]
 dev = [
   "bandit>=1.8",
