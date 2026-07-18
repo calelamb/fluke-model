@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from dataclasses import dataclass
 
 import torch
@@ -25,7 +26,7 @@ class MobileDINOv2Wrapper(torch.nn.Module):
 
     def __init__(self, model: torch.nn.Module) -> None:
         super().__init__()
-        self._model = model.eval()
+        self._model = deepcopy(model).eval()
 
     def forward(self, pixels: torch.Tensor) -> torch.Tensor:
         output = self._model(pixel_values=pixels, return_dict=False)
