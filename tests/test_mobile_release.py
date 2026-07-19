@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 from dataclasses import FrozenInstanceError, replace
@@ -10,6 +11,8 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+
+import fluke_model.mobile_release as mobile_release_module
 
 from fluke_model.coreml_artifact import package_tree_sha256
 from fluke_model.mobile_catalog import (
@@ -45,6 +48,8 @@ BOUNDARY_NAMES = (
     "required_reports",
 )
 OPEN_COHORTS = ("openSet", "nonOrca", "poorQuality", "occlusion", "distributionShift")
+SYNTHETIC_PACKAGE_SHA256 = "a" * 64
+SYNTHETIC_CATALOG_SHA256 = "b" * 64
 
 
 def _passed_boundaries() -> tuple[ValidationEvidence, ...]:
@@ -70,6 +75,8 @@ def release_evidence_fixture(
         false_accept=false_accept,
         open_set_sample_count=100,
         validations=_passed_boundaries(),
+        model_package_sha256=SYNTHETIC_PACKAGE_SHA256,
+        catalog_manifest_sha256=SYNTHETIC_CATALOG_SHA256,
     )
 
 
@@ -222,8 +229,15 @@ def test_release_requires_every_approved_gate() -> None:
     assert all(gate.passed for gate in report.gates)
 
 
-def test_pure_evidence_report_uses_literal_null_release_digests() -> None:
-    payload = report_payload(verify_mobile_release(release_evidence_fixture()))
+def test_pure_evidence_without_release_digests_cannot_be_ready() -> None:
+    evidence = replace(
+        release_evidence_fixture(),
+        model_package_sha256=None,
+        catalog_manifest_sha256=None,
+    )
+
+    report = verify_mobile_release(evidence)
+    payload = report_payload(report)
 
     assert set(payload) == {
         "schemaVersion",
@@ -235,6 +249,29 @@ def test_pure_evidence_report_uses_literal_null_release_digests() -> None:
     }
     assert payload["modelPackageSha256"] is None
     assert payload["catalogManifestSha256"] is None
+    assert report.ready is False
+    assert next(g for g in report.gates if g.name == "model_package_digest").passed is False
+    assert next(g for g in report.gates if g.name == "catalog_manifest_digest").passed is False
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("model_package_sha256", "invalid"),
+        ("model_package_sha256", "A" * 64),
+        ("catalog_manifest_sha256", "invalid"),
+        ("catalog_manifest_sha256", "B" * 64),
+    ),
+)
+def test_pure_evidence_invalid_release_digest_fails_without_escaping(
+    field: str, value: str
+) -> None:
+    evidence = replace(release_evidence_fixture(), **{field: value})
+
+    report = verify_mobile_release(evidence)
+
+    assert report.ready is False
+    assert getattr(report, field) == value
 
 
 @pytest.mark.parametrize(
@@ -372,6 +409,83 @@ def test_report_destination_cannot_mutate_verified_release_tree(
 
     with pytest.raises(ValueError, match="overlap"):
         validate_report_destination(release_dir, release_dir / relative_path)
+
+
+@pytest.mark.parametrize("relative_path", ("custom.json", "nested/report.json"))
+def test_in_release_report_destination_must_use_canonical_filename(
+    tmp_path: Path, relative_path: str
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+
+    with pytest.raises(ValueError, match="mobile-release-report.json"):
+        validate_report_destination(release_dir, release_dir / relative_path)
+
+
+def test_cli_rejects_in_release_custom_report_without_poisoning_next_run(
+    tmp_path: Path,
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    script = Path(__file__).parent.parent / "scripts" / "verify_mobile_release.py"
+    custom = release_dir / "custom.json"
+
+    rejected = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--release-dir",
+            str(release_dir),
+            "--report",
+            str(custom),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    first_default = subprocess.run(
+        [sys.executable, str(script), "--release-dir", str(release_dir)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    second_default = subprocess.run(
+        [sys.executable, str(script), "--release-dir", str(release_dir)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert rejected.returncode == 2
+    assert not custom.exists()
+    assert first_default.returncode == 0
+    assert second_default.returncode == 0
+    assert (release_dir / "mobile-release-report.json").is_file()
+
+
+def test_failed_report_details_are_root_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "source"
+    source.mkdir()
+    first = tmp_path / "first-root"
+    second = tmp_path / "second-root"
+    shutil.copytree(source, first)
+    shutil.copytree(source, second)
+
+    def fail_catalog(paths: object, _package: object) -> object:
+        catalog_manifest = getattr(paths, "catalog_manifest")
+        raise OSError(f"cannot read malformed input {catalog_manifest}")
+
+    monkeypatch.setattr(mobile_release_module, "_inspect_catalog", fail_catalog)
+
+    first_payload = report_payload(verify_mobile_release_directory(first))
+    second_payload = report_payload(verify_mobile_release_directory(second))
+    first_bytes = json.dumps(first_payload, sort_keys=True).encode()
+    second_bytes = json.dumps(second_payload, sort_keys=True).encode()
+
+    assert first_bytes == second_bytes
+    assert str(first) not in first_bytes.decode()
+    assert str(second) not in second_bytes.decode()
+    assert "<release-dir>" in first_bytes.decode()
 
 
 @pytest.mark.parametrize(

@@ -107,7 +107,13 @@ schemaVersion, modelPackageSha256, catalogManifestSha256, ready, thresholds, gat
 
 The two digest fields contain the actual verified Core ML package-tree and catalog-manifest SHA256
 values. Either is literal JSON `null` when the corresponding input cannot be safely hashed; a stale
-or copied report can therefore never supply release identity.
+or copied report can therefore never supply release identity. Both fields are independent readiness
+gates: each must contain a valid lowercase SHA256 even when all metric and boundary gates pass.
+
+Within the release root, verifier output may be written only to the canonical
+`mobile-release-report.json` path. A custom `--report` destination is allowed only outside the
+release root, preventing verifier output from creating an extra entry that would invalidate the
+next exact-layout check.
 
 The two parity files are exact two-dimensional Float32 NumPy arrays with equal positive `(N, 384)`
 shape, finite values, and unit-normalized rows. Parity is the minimum per-row cosine similarity.

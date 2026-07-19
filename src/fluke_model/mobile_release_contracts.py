@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import math
+import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -310,6 +311,13 @@ def validate_report_destination(release_dir: Path, report_path: Path) -> None:
     destination = Path(report_path)
     reject_symlink_components(destination, "release report")
     resolved = destination.resolve(strict=False)
+    release_root = paths.root.resolve(strict=False)
+    canonical = (release_root / REPORT_FILENAME).resolve(strict=False)
+    if resolved.is_relative_to(release_root) and resolved != canonical:
+        raise ValueError(
+            "report path overlaps the release input contract; path inside release directory "
+            f"must be exactly {REPORT_FILENAME}"
+        )
     protected = (
         paths.package,
         paths.catalog_dir,
@@ -325,6 +333,32 @@ def validate_report_destination(release_dir: Path, report_path: Path) -> None:
         )
         if overlaps:
             raise ValueError("release report path overlaps a release input")
+
+
+def normalize_external_detail(detail: object, release_dir: Path) -> str:
+    """Replace host-specific release/temp roots before serializing gate evidence."""
+    text = str(detail)
+    root = Path(release_dir)
+    candidates = {
+        str(root),
+        str(root.absolute()),
+        str(root.resolve(strict=False)),
+    }
+    temporary = Path(tempfile.gettempdir())
+    temporary_candidates = {
+        str(temporary),
+        str(temporary.absolute()),
+        str(temporary.resolve(strict=False)),
+    }
+    normalized = _replace_path_tokens(text, candidates, "<release-dir>")
+    return _replace_path_tokens(normalized, temporary_candidates, "<temp-dir>")
+
+
+def _replace_path_tokens(text: str, paths: set[str], token: str) -> str:
+    normalized = text
+    for value in sorted((path for path in paths if path), key=len, reverse=True):
+        normalized = normalized.replace(value, token)
+    return normalized
 
 
 def safe_package_digest(path: Path) -> str | None:

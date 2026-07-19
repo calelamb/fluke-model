@@ -7,7 +7,7 @@ import math
 import os
 import tempfile
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
 
@@ -32,6 +32,7 @@ from fluke_model.mobile_release_contracts import (
     inspect_embeddings,
     inspect_evaluations,
     inspect_package,
+    normalize_external_detail,
     passed,
     release_paths,
     require_sha256,
@@ -87,8 +88,6 @@ class MobileReleaseEvidence:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "validations", tuple(self.validations))
-        _validate_optional_digest(self.model_package_sha256, "model_package_sha256")
-        _validate_optional_digest(self.catalog_manifest_sha256, "catalog_manifest_sha256")
 
 
 @dataclass(frozen=True)
@@ -113,8 +112,6 @@ class MobileReleaseReport:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "gates", tuple(self.gates))
-        _validate_optional_digest(self.model_package_sha256, "model_package_sha256")
-        _validate_optional_digest(self.catalog_manifest_sha256, "catalog_manifest_sha256")
 
 
 @dataclass(frozen=True)
@@ -130,6 +127,8 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
     if not isinstance(evidence, MobileReleaseEvidence):
         raise TypeError("evidence must be MobileReleaseEvidence")
     gates = (
+        _digest_gate("model_package_digest", evidence.model_package_sha256),
+        _digest_gate("catalog_manifest_digest", evidence.catalog_manifest_sha256),
         *_boundary_gates(evidence.validations),
         _count_gate("parity_samples", evidence.parity_sample_count),
         _metric_gate("parity_cosine", evidence.parity_cosine),
@@ -149,15 +148,25 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
 
 def verify_mobile_release_directory(release_dir: Path) -> MobileReleaseReport:
     """Inspect the fixed release layout and always return a fail-closed report."""
+    root = Path(release_dir)
     try:
-        return _verify_mobile_release_directory(Path(release_dir))
+        report = _verify_mobile_release_directory(root)
     except _EXPECTED_INPUT_ERRORS as error:
-        return failed_mobile_release_report(f"release input validation failed: {error}")
+        detail = normalize_external_detail(f"release input validation failed: {error}", root)
+        report = failed_mobile_release_report(detail)
+    return _normalize_report_details(report, root)
 
 
-def failed_mobile_release_report(detail: str) -> MobileReleaseReport:
+def failed_mobile_release_report(
+    detail: str, release_dir: Path | None = None
+) -> MobileReleaseReport:
     """Build a deterministic all-failed report for a bounded external-input error."""
-    validations = tuple(failed(name, detail) for name in _BOUNDARY_GATE_NAMES)
+    stable_detail = (
+        normalize_external_detail(detail, Path(release_dir))
+        if release_dir is not None
+        else detail
+    )
+    validations = tuple(failed(name, stable_detail) for name in _BOUNDARY_GATE_NAMES)
     return verify_mobile_release(
         MobileReleaseEvidence(
             parity_cosine=None,
@@ -397,6 +406,18 @@ def _count_gate(name: str, value: object) -> GateResult:
     )
 
 
+def _digest_gate(name: str, value: object) -> GateResult:
+    valid = _is_lowercase_sha256(value)
+    observed = value if isinstance(value, str) else None
+    return GateResult(
+        name,
+        valid,
+        observed,
+        "valid lowercase SHA256 release identity",
+        "digest is bound" if valid else "digest is missing or invalid",
+    )
+
+
 def _metric_gate(name: str, value: object) -> GateResult:
     threshold = RELEASE_THRESHOLDS[name]
     numeric = _finite_float(value)
@@ -428,9 +449,22 @@ def _finite_float(value: object) -> float | None:
     return result if math.isfinite(result) else None
 
 
-def _validate_optional_digest(value: str | None, name: str) -> None:
-    if value is not None:
-        require_sha256(value, name)
+def _is_lowercase_sha256(value: object) -> bool:
+    try:
+        require_sha256(value, "release digest")
+    except ValueError:
+        return False
+    return True
+
+
+def _normalize_report_details(
+    report: MobileReleaseReport, release_dir: Path
+) -> MobileReleaseReport:
+    gates = tuple(
+        replace(gate, detail=normalize_external_detail(gate.detail, release_dir))
+        for gate in report.gates
+    )
+    return replace(report, gates=gates)
 
 
 __all__ = [

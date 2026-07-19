@@ -43,7 +43,9 @@ def main() -> int:
     try:
         report = verify_mobile_release_directory(args.release_dir)
     except (EOFError, OSError, OverflowError, UnicodeError, ValueError, TypeError) as error:
-        report = failed_mobile_release_report(f"release input validation failed: {error}")
+        report = failed_mobile_release_report(
+            f"release input validation failed: {error}", args.release_dir
+        )
     try:
         validate_report_destination(args.release_dir, report_path)
         write_mobile_release_report(report_path, report)
