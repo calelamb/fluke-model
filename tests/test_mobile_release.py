@@ -99,6 +99,11 @@ def _write_json(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload, sort_keys=True), encoding="utf-8")
 
 
+def _update_json(path: Path, **updates: object) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    _write_json(path, {**payload, **updates})
+
+
 def _evaluation_report(
     *,
     evaluation_type: str,
@@ -217,6 +222,21 @@ def test_release_requires_every_approved_gate() -> None:
     assert all(gate.passed for gate in report.gates)
 
 
+def test_pure_evidence_report_uses_literal_null_release_digests() -> None:
+    payload = report_payload(verify_mobile_release(release_evidence_fixture()))
+
+    assert set(payload) == {
+        "schemaVersion",
+        "modelPackageSha256",
+        "catalogManifestSha256",
+        "ready",
+        "thresholds",
+        "gates",
+    }
+    assert payload["modelPackageSha256"] is None
+    assert payload["catalogManifestSha256"] is None
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     (("parity_cosine", 0.9989), ("top_1", 0.649), ("top_3", 0.799), ("false_accept", 0.051)),
@@ -278,6 +298,50 @@ def test_directory_verifier_accepts_complete_digest_bound_fixture(tmp_path: Path
     assert report.ready is True
     assert all(gate.passed for gate in report.gates)
     assert {gate.name for gate in report.gates}.issuperset(BOUNDARY_NAMES)
+    assert report.model_package_sha256 == package_tree_sha256(
+        release_dir / "FlukeEmbedder.mlpackage"
+    )
+    assert report.catalog_manifest_sha256 == sha256_file(
+        release_dir / "catalog" / "manifest.json"
+    )
+
+
+def test_stale_copied_report_is_ignored_and_rebound_to_current_release(tmp_path: Path) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    _write_json(
+        release_dir / "mobile-release-report.json",
+        {
+            "schemaVersion": 1,
+            "modelPackageSha256": "0" * 64,
+            "catalogManifestSha256": "1" * 64,
+            "ready": True,
+            "thresholds": {},
+            "gates": [],
+        },
+    )
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is True
+    assert report.model_package_sha256 != "0" * 64
+    assert report.catalog_manifest_sha256 != "1" * 64
+
+
+@pytest.mark.parametrize("kind", ("directory", "symlink"))
+def test_optional_prior_report_must_be_a_regular_file(tmp_path: Path, kind: str) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    report_path = release_dir / "mobile-release-report.json"
+    if kind == "directory":
+        report_path.mkdir()
+    else:
+        external = tmp_path / "external-report.json"
+        external.write_text("{}", encoding="utf-8")
+        report_path.symlink_to(external)
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert "optional report" in next(g.detail for g in report.gates if g.name == "input_paths")
 
 
 def test_directory_report_is_byte_deterministic(tmp_path: Path) -> None:
@@ -358,6 +422,97 @@ def test_directory_verifier_rejects_catalog_digest_mismatch(tmp_path: Path) -> N
     assert next(g for g in report.gates if g.name == "digests").passed is False
 
 
+@pytest.mark.parametrize("value", (True, False))
+@pytest.mark.parametrize("shape_name", ("input_shape", "output_shape"))
+def test_directory_verifier_rejects_boolean_export_shapes(
+    tmp_path: Path, shape_name: str, value: bool
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    path = release_dir / "export-metadata.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload[shape_name] = [value, *payload[shape_name][1:]]
+    _write_json(path, payload)
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert next(g for g in report.gates if g.name == "package").passed is False
+
+
+@pytest.mark.parametrize("value", (True, False))
+@pytest.mark.parametrize(
+    "field",
+    (
+        "schemaVersion",
+        "embeddingDimension",
+        "referenceCount",
+        "catalogCount",
+        "scoreThreshold",
+        "marginThreshold",
+    ),
+)
+def test_directory_verifier_rejects_boolean_catalog_numeric_fields(
+    tmp_path: Path, field: str, value: bool
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    _update_json(release_dir / "catalog" / "manifest.json", **{field: value})
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert next(g for g in report.gates if g.name == "catalog").passed is False
+
+
+@pytest.mark.parametrize("value", (True, False))
+@pytest.mark.parametrize(
+    ("filename", "field"),
+    (
+        ("closed-set.json", "schemaVersion"),
+        ("closed-set.json", "sampleCount"),
+        ("closed-set.json", "top1"),
+        ("closed-set.json", "top3"),
+        ("open-set.json", "schemaVersion"),
+        ("open-set.json", "sampleCount"),
+        ("open-set.json", "falseAcceptRate"),
+    ),
+)
+def test_directory_verifier_rejects_boolean_evaluation_numeric_fields(
+    tmp_path: Path, filename: str, field: str, value: bool
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    _update_json(release_dir / "evaluation" / filename, **{field: value})
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert next(g for g in report.gates if g.name == "required_reports").passed is False
+
+
+def _rebind_evaluation_catalog_digest(release_dir: Path) -> None:
+    digest = sha256_file(release_dir / "catalog" / "manifest.json")
+    for path in (release_dir / "evaluation").glob("*.json"):
+        _update_json(path, catalogManifestSha256=digest)
+
+
+def test_directory_verifier_rejects_self_consistent_unnormalized_catalog(
+    tmp_path: Path,
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    vector_path = release_dir / "catalog" / "references.f16"
+    vectors = np.fromfile(vector_path, dtype="<f2")
+    vector_path.write_bytes((vectors * 0.5).astype("<f2").tobytes())
+    _update_json(
+        release_dir / "catalog" / "manifest.json",
+        vectorsSha256=sha256_file(vector_path),
+    )
+    _rebind_evaluation_catalog_digest(release_dir)
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert "normalized" in next(g.detail for g in report.gates if g.name == "catalog")
+
+
 def test_directory_verifier_rejects_rights_digest_or_permission_change(tmp_path: Path) -> None:
     release_dir = build_release_fixture(tmp_path)
     rights_path = release_dir / "rights-attestation.json"
@@ -432,6 +587,69 @@ def test_directory_verifier_rejects_symlinked_input(tmp_path: Path) -> None:
 
     assert report.ready is False
     assert "symbolic link" in next(g.detail for g in report.gates if g.name == "input_paths")
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    ("unexpected.txt", "catalog/stale.json", "evaluation/old-results.json"),
+)
+def test_directory_verifier_rejects_extra_layout_entries(
+    tmp_path: Path, relative_path: str
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    extra = release_dir / relative_path
+    extra.parent.mkdir(parents=True, exist_ok=True)
+    extra.write_text("stale", encoding="utf-8")
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert "exact" in next(g.detail for g in report.gates if g.name == "input_paths")
+
+
+@pytest.mark.parametrize("content", (b"", b"\x93NUMPY"))
+def test_directory_verifier_bounds_corrupt_or_truncated_numpy(
+    tmp_path: Path, content: bytes
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    (release_dir / "evaluation" / "parity-coreml.npy").write_bytes(content)
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert report.model_package_sha256 is not None
+
+
+def test_directory_verifier_bounds_huge_integer_metrics(tmp_path: Path) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    _update_json(release_dir / "evaluation" / "closed-set.json", top1=10**1000)
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+
+
+def test_cli_bounds_verification_failure_and_writes_null_digest_report(tmp_path: Path) -> None:
+    release_dir = tmp_path / "invalid"
+    release_dir.mkdir()
+    (release_dir / "evaluation").mkdir()
+    (release_dir / "evaluation" / "closed-set.json").write_text(
+        '{"top1":' + "9" * 5000 + "}", encoding="utf-8"
+    )
+    script = Path(__file__).parent.parent / "scripts" / "verify_mobile_release.py"
+
+    result = subprocess.run(
+        [sys.executable, str(script), "--release-dir", str(release_dir)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads((release_dir / "mobile-release-report.json").read_text(encoding="utf-8"))
+    assert result.returncode != 0
+    assert payload["ready"] is False
+    assert payload["modelPackageSha256"] is None
+    assert payload["catalogManifestSha256"] is None
 
 
 def test_cli_fails_nonzero_and_writes_explicit_missing_gate_report(tmp_path: Path) -> None:

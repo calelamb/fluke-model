@@ -124,6 +124,18 @@ class MobileCatalogManifest:
 
 
 @dataclass(frozen=True)
+class ValidatedMobileCatalog:
+    """Immutable evidence reread from a fully validated published catalog."""
+
+    manifest: MobileCatalogManifest
+    rows: tuple[ReferenceRow, ...]
+    manifest_sha256: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rows", tuple(self.rows))
+
+
+@dataclass(frozen=True)
 class MobileDataRights:
     """Per-source permissions required for an offline redistributed ML bundle."""
 
@@ -219,6 +231,13 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: stream.read(_HASH_CHUNK_BYTES), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def validate_published_mobile_catalog(catalog_dir: Path) -> ValidatedMobileCatalog:
+    """Reread and fully validate an exact Task 3 catalog without trusting publication state."""
+    from fluke_model.mobile_catalog_validation import validate_published_mobile_catalog as validate
+
+    return validate(Path(catalog_dir))
 
 
 def write_mobile_catalog(

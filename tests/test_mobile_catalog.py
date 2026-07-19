@@ -14,9 +14,11 @@ from fluke_model.mobile_catalog import (
     MobileCatalogManifest,
     MobileCatalogRelease,
     ReferenceRow,
+    ValidatedMobileCatalog,
     manifest_payload,
     sha256_file,
     validate_embeddings,
+    validate_published_mobile_catalog,
     write_mobile_catalog,
 )
 from fluke_model.rights import RightsError
@@ -444,3 +446,142 @@ def test_manifest_payload_does_not_expose_dataclass_field_names() -> None:
 
     assert set(manifest_payload(manifest)) == MANIFEST_KEYS
     assert "schema_version" not in manifest_payload(manifest)
+
+
+def _rewrite_published_manifest(catalog: Path, **updates: object) -> None:
+    path = catalog / "manifest.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**payload, **updates}, sort_keys=True), encoding="utf-8")
+
+
+def _two_row_catalog(tmp_path: Path) -> Path:
+    catalog = tmp_path / "catalog"
+    rows = (
+        ReferenceRow("ref-a", "whale-a", "A", "synthetic-owned-fixture"),
+        ReferenceRow("ref-z", "whale-z", "Z", "synthetic-owned-fixture"),
+    )
+    vectors = np.array([[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32)
+    write_mobile_catalog(catalog, vectors, rows, release_fixture())
+    return catalog
+
+
+def _rewrite_published_metadata(
+    catalog: Path,
+    rows: list[dict[str, str]],
+    vectors: np.ndarray | None = None,
+) -> None:
+    metadata_path = catalog / "metadata.json"
+    metadata_path.write_text(json.dumps(rows, sort_keys=True), encoding="utf-8")
+    updates: dict[str, object] = {"metadataSha256": sha256_file(metadata_path)}
+    if vectors is not None:
+        vector_path = catalog / "references.f16"
+        vector_path.write_bytes(vectors.astype("<f2").tobytes())
+        updates = {**updates, "vectorsSha256": sha256_file(vector_path)}
+    _rewrite_published_manifest(catalog, **updates)
+
+
+def test_published_catalog_validator_returns_immutable_complete_evidence(tmp_path: Path) -> None:
+    catalog = _two_row_catalog(tmp_path)
+
+    validated = validate_published_mobile_catalog(catalog)
+
+    assert isinstance(validated, ValidatedMobileCatalog)
+    assert validated.manifest.reference_count == 2
+    assert tuple(row.reference_photo_id for row in validated.rows) == ("ref-a", "ref-z")
+    assert validated.manifest_sha256 == sha256_file(catalog / "manifest.json")
+    with pytest.raises(FrozenInstanceError):
+        validated.manifest_sha256 = "0" * 64
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("schemaVersion", True),
+        ("schemaVersion", False),
+        ("embeddingDimension", True),
+        ("embeddingDimension", False),
+        ("referenceCount", True),
+        ("referenceCount", False),
+        ("catalogCount", True),
+        ("catalogCount", False),
+        ("scoreThreshold", True),
+        ("scoreThreshold", False),
+        ("marginThreshold", True),
+        ("marginThreshold", False),
+    ),
+)
+def test_published_catalog_validator_rejects_boolean_numeric_fields(
+    tmp_path: Path, field: str, value: bool
+) -> None:
+    catalog = _two_row_catalog(tmp_path)
+    _rewrite_published_manifest(catalog, **{field: value})
+
+    with pytest.raises(ValueError, match=field):
+        validate_published_mobile_catalog(catalog)
+
+
+def test_published_catalog_validator_rejects_self_consistent_catalog_count(
+    tmp_path: Path,
+) -> None:
+    catalog = _two_row_catalog(tmp_path)
+    metadata_path = catalog / "metadata.json"
+    rows = json.loads(metadata_path.read_text(encoding="utf-8"))
+    rows[1] = {**rows[1], "catalogId": "A", "whaleId": "whale-a"}
+    _rewrite_published_metadata(catalog, rows)
+
+    with pytest.raises(ValueError, match="catalogCount"):
+        validate_published_mobile_catalog(catalog)
+
+
+def test_published_catalog_validator_rejects_unstable_identity_mapping(tmp_path: Path) -> None:
+    catalog = _two_row_catalog(tmp_path)
+    metadata_path = catalog / "metadata.json"
+    rows = json.loads(metadata_path.read_text(encoding="utf-8"))
+    rows[1] = {**rows[1], "whaleId": "whale-a"}
+    _rewrite_published_metadata(catalog, rows)
+
+    with pytest.raises(ValueError, match="stable"):
+        validate_published_mobile_catalog(catalog)
+
+
+def test_published_catalog_validator_rejects_nondeterministic_metadata_order(
+    tmp_path: Path,
+) -> None:
+    catalog = _two_row_catalog(tmp_path)
+    metadata_path = catalog / "metadata.json"
+    rows = json.loads(metadata_path.read_text(encoding="utf-8"))
+    vectors = np.fromfile(catalog / "references.f16", dtype="<f2").reshape(2, 3)
+    _rewrite_published_metadata(catalog, rows[::-1], vectors[::-1])
+
+    with pytest.raises(ValueError, match="sorted"):
+        validate_published_mobile_catalog(catalog)
+
+
+@pytest.mark.parametrize(
+    "vectors",
+    (
+        np.array([[np.nan, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32),
+        np.array([[0.5, 0.0, 0.0], [0.0, 1.0, 0.0]], dtype=np.float32),
+    ),
+)
+def test_published_catalog_validator_rejects_invalid_float16_vectors(
+    tmp_path: Path, vectors: np.ndarray
+) -> None:
+    catalog = _two_row_catalog(tmp_path)
+    vector_path = catalog / "references.f16"
+    vector_path.write_bytes(vectors.astype("<f2").tobytes())
+    _rewrite_published_manifest(catalog, vectorsSha256=sha256_file(vector_path))
+
+    with pytest.raises(ValueError, match="finite|normalized"):
+        validate_published_mobile_catalog(catalog)
+
+
+@pytest.mark.parametrize("extra_name", ("extra.json", ".stale.tmp"))
+def test_published_catalog_validator_rejects_extra_files(
+    tmp_path: Path, extra_name: str
+) -> None:
+    catalog = _two_row_catalog(tmp_path)
+    (catalog / extra_name).write_text("stale", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="exactly"):
+        validate_published_mobile_catalog(catalog)

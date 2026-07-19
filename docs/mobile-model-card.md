@@ -94,7 +94,20 @@ evaluation/
   poor-quality.json
   occlusion.json
   distribution-shift.json
+mobile-release-report.json  # optional prior output; never trusted as input evidence
 ```
+
+No other root, catalog, or evaluation entries are allowed. A prior report may be present so the
+verifier can safely replace it, but its contents are ignored. The newly generated report is bound
+to current inputs with this exact top-level schema:
+
+```text
+schemaVersion, modelPackageSha256, catalogManifestSha256, ready, thresholds, gates
+```
+
+The two digest fields contain the actual verified Core ML package-tree and catalog-manifest SHA256
+values. Either is literal JSON `null` when the corresponding input cannot be safely hashed; a stale
+or copied report can therefore never supply release identity.
 
 The two parity files are exact two-dimensional Float32 NumPy arrays with equal positive `(N, 384)`
 shape, finite values, and unit-normalized rows. Parity is the minimum per-row cosine similarity.
