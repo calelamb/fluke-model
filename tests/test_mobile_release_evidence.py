@@ -32,7 +32,7 @@ def _manifest(relative_path: str, digest: str) -> dict[str, object]:
                 "fixtureId": "fixture-1",
                 "relativePath": relative_path,
                 "imageSha256": digest,
-                "roles": ["parity", "reference"],
+                "roles": ["reference"],
                 "referencePhotoId": "reference-1",
                 "whaleId": "whale-1",
                 "catalogId": "catalog-1",
@@ -111,7 +111,7 @@ def test_recompute_metrics_uses_rank_and_exact_score_margin_acceptance() -> None
 
     metrics = recompute_metrics(decisions, score_threshold=0.75, margin_threshold=0.15)
 
-    assert metrics["closedSetRetrieval"] == {"sampleCount": 2, "top1": 0.5, "top3": 1.0}
+    assert metrics["closedSetRetrieval"] == {"sampleCount": 2, "top1": 0.5, "top3": 0.5}
     assert metrics["openSet"] == {"sampleCount": 2, "falseAcceptRate": 0.5}
 
 
@@ -130,3 +130,28 @@ def test_fixture_rows_are_immutable() -> None:
 
     with pytest.raises(AttributeError):
         row.fixture_id = "changed"
+
+
+def test_corpus_manifest_rejects_reference_content_reused_by_evaluation(tmp_path: Path) -> None:
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "reference.jpg").write_bytes(b"same-image")
+    (corpus / "query.jpg").write_bytes(b"same-image")
+    first = _manifest("reference.jpg", _sha(b"same-image"))["rows"][0]
+    second = {
+        **first,
+        "fixtureId": "query-1",
+        "relativePath": "query.jpg",
+        "roles": ["closedSetRetrieval"],
+        "referencePhotoId": None,
+        "catalogId": None,
+        "sourceId": None,
+    }
+    manifest = tmp_path / "manifest.json"
+    manifest.write_text(
+        json.dumps({**_manifest("reference.jpg", _sha(b"same-image")), "rows": [first, second]}),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="imageSha256"):
+        load_corpus_manifest(manifest, corpus)

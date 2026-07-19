@@ -46,6 +46,7 @@ OPEN_REPORTS = (
 _ROOT_ENTRIES = frozenset(
     {
         "FlukeEmbedder.mlpackage",
+        "source-model",
         "export-metadata.json",
         "rights-attestation.json",
         "catalog",
@@ -55,6 +56,7 @@ _ROOT_ENTRIES = frozenset(
 _CATALOG_ENTRIES = frozenset({"manifest.json", "metadata.json", "references.f16"})
 _EVALUATION_ENTRIES = frozenset(
     {
+        "fixtures",
         "parity-pytorch.npy",
         "parity-coreml.npy",
         "fixture-manifest.json",
@@ -134,6 +136,9 @@ _EVALUATION_PLAN_KEYS = {
     "approvedAt",
     "provenanceUrl",
     "cohortDefinitions",
+    "scoreThreshold",
+    "marginThreshold",
+    "runtimeVersions",
 }
 _SHA256_LENGTH = 64
 
@@ -153,6 +158,7 @@ class ReleasePaths:
 
     root: Path
     package: Path
+    source_model: Path
     export_metadata: Path
     catalog_dir: Path
     catalog_manifest: Path
@@ -160,6 +166,7 @@ class ReleasePaths:
     catalog_metadata: Path
     rights: Path
     evaluation_dir: Path
+    fixture_images: Path
     pytorch_embeddings: Path
     coreml_embeddings: Path
     fixture_manifest: Path
@@ -219,6 +226,7 @@ def release_paths(root: Path) -> ReleasePaths:
     return ReleasePaths(
         root=release_root,
         package=release_root / "FlukeEmbedder.mlpackage",
+        source_model=release_root / "source-model",
         export_metadata=release_root / "export-metadata.json",
         catalog_dir=catalog,
         catalog_manifest=catalog / "manifest.json",
@@ -226,6 +234,7 @@ def release_paths(root: Path) -> ReleasePaths:
         catalog_metadata=catalog / "metadata.json",
         rights=release_root / "rights-attestation.json",
         evaluation_dir=evaluation,
+        fixture_images=evaluation / "fixtures",
         pytorch_embeddings=evaluation / "parity-pytorch.npy",
         coreml_embeddings=evaluation / "parity-coreml.npy",
         fixture_manifest=evaluation / "fixture-manifest.json",
@@ -250,6 +259,10 @@ def validate_input_layout(paths: ReleasePaths) -> ValidationEvidence:
         problems = (*problems, *_layout_problems(paths))
     if paths.package.is_symlink() or not paths.package.is_dir():
         problems = (*problems, "FlukeEmbedder.mlpackage is missing or not a regular directory")
+    if paths.source_model.is_symlink() or not paths.source_model.is_dir():
+        problems = (*problems, "source-model is missing or not a regular directory")
+    if paths.fixture_images.is_symlink() or not paths.fixture_images.is_dir():
+        problems = (*problems, "evaluation/fixtures is missing or not a regular directory")
     for relative, path in paths.required_files():
         problems = (*problems, *_file_problems(relative, path))
     return validation(
@@ -361,7 +374,9 @@ def inspect_evaluations(
     if package_digest is None or catalog_digest is None:
         problems = (*problems, "package or catalog digest unavailable for report provenance")
     try:
-        plan_provenance = _validate_evaluation_plan(paths.evaluation_plan)
+        plan_provenance, plan_score, plan_margin = _validate_evaluation_plan(paths.evaluation_plan)
+        if score_threshold != plan_score or margin_threshold != plan_margin:
+            raise ValueError("catalog thresholds do not match the approved evaluation plan")
         fixture_rows = load_published_fixture_rows(paths.fixture_manifest)
         fixture_digest = fixture_set_sha256(fixture_rows)
         _validate_fixture_catalog_binding(fixture_rows, catalog_rows)
@@ -560,6 +575,14 @@ def _layout_problems(paths: ReleasePaths) -> tuple[str, ...]:
         *problems,
         *_exact_directory_problems(paths.evaluation_dir, _EVALUATION_ENTRIES, "evaluation"),
     )
+    problems = (
+        *problems,
+        *_exact_directory_problems(
+            paths.source_model,
+            frozenset(DINOV2_ARTIFACT_SHA256),
+            "source-model",
+        ),
+    )
     return problems
 
 
@@ -736,7 +759,7 @@ def _validate_parity_report(
     if parity_count != sample_count:
         raise ValueError("parity fixture count does not match the arrays")
     _require_fixture_digest(payload, fixture_set_sha256(fixture_rows))
-    plan_provenance = _validate_evaluation_plan(paths.evaluation_plan)
+    plan_provenance, _, _ = _validate_evaluation_plan(paths.evaluation_plan)
     _validate_production_evidence(payload, expected_provenance=plan_provenance)
 
 
@@ -828,7 +851,7 @@ def _validate_production_evidence(
     require_sha256(payload["fixtureSetSha256"], "report fixtureSetSha256")
 
 
-def _validate_evaluation_plan(path: Path) -> str:
+def _validate_evaluation_plan(path: Path) -> tuple[str, float, float]:
     payload = load_json_mapping(path, "evaluation plan")
     if set(payload) != _EVALUATION_PLAN_KEYS:
         raise ValueError("evaluation plan fields do not match the exact schema")
@@ -857,7 +880,14 @@ def _validate_evaluation_plan(path: Path) -> str:
     parsed = urlsplit(provenance)
     if parsed.scheme != "https" or not parsed.netloc:
         raise ValueError("evaluation plan provenanceUrl must be an absolute HTTPS URL")
-    return provenance
+    versions = payload["runtimeVersions"]
+    if not isinstance(versions, dict) or set(versions) != set(_TOOL_VERSIONS):
+        raise ValueError("evaluation plan runtimeVersions do not match the exact schema")
+    if versions != dict(_TOOL_VERSIONS):
+        raise ValueError("evaluation plan runtimeVersions do not match audited release versions")
+    score = finite_rate(payload["scoreThreshold"], "evaluation plan scoreThreshold", lower=-1.0)
+    margin = finite_rate(payload["marginThreshold"], "evaluation plan marginThreshold", lower=-1.0)
+    return provenance, score, margin
 
 
 def _closed_metrics(payload: Mapping[str, Any]) -> tuple[float, float]:

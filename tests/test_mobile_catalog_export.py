@@ -6,8 +6,17 @@ from pathlib import Path
 
 import pytest
 
-from fluke_model.mobile_catalog_export import export_verified_mobile_catalog
-from test_mobile_release import _valid_coreml_spec, build_release_fixture
+from fluke_model.mobile_catalog_export import _export_verified_mobile_catalog_for_testing
+from test_mobile_release import build_release_fixture, verify_mobile_release_directory
+
+
+def export_verified_mobile_catalog(release: Path, output: Path, *, app_build: int):
+    return _export_verified_mobile_catalog_for_testing(
+        release,
+        output,
+        app_build=app_build,
+        verifier=verify_mobile_release_directory,
+    )
 
 
 def test_export_copies_only_exact_verified_catalog_files(tmp_path: Path) -> None:
@@ -18,7 +27,6 @@ def test_export_copies_only_exact_verified_catalog_files(tmp_path: Path) -> None
         release,
         output,
         app_build=2,
-        package_loader=lambda _path: _valid_coreml_spec(),
     )
 
     assert {path.name for path in output.iterdir()} == {
@@ -40,7 +48,6 @@ def test_export_rejects_incompatible_app_build(tmp_path: Path) -> None:
             release,
             tmp_path / "output",
             app_build=101,
-            package_loader=lambda _path: _valid_coreml_spec(),
         )
 
 
@@ -54,5 +61,4 @@ def test_export_rejects_existing_destination(tmp_path: Path) -> None:
             release,
             output,
             app_build=2,
-            package_loader=lambda _path: _valid_coreml_spec(),
         )

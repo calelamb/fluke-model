@@ -30,8 +30,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest-version", required=True)
     parser.add_argument("--minimum-app-build", type=int, required=True)
     parser.add_argument("--maximum-app-build", type=int, required=True)
-    parser.add_argument("--score-threshold", type=float, required=True)
-    parser.add_argument("--margin-threshold", type=float, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     return parser
 
@@ -53,8 +51,6 @@ def main() -> int:
                 manifest_version=args.manifest_version,
                 minimum_app_build=args.minimum_app_build,
                 maximum_app_build=args.maximum_app_build,
-                score_threshold=args.score_threshold,
-                margin_threshold=args.margin_threshold,
             ),
         )
     except (OSError, RuntimeError, UnicodeError, ValueError, TypeError) as error:

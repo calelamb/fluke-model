@@ -61,6 +61,7 @@ _BOUNDARY_GATE_NAMES = (
     "embedding_shape",
     "embedding_norm",
     "required_reports",
+    "runtime_reexecution",
 )
 _EXPECTED_INPUT_ERRORS = (
     EOFError,
@@ -150,10 +151,37 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
 
 def verify_mobile_release_directory(
     release_dir: Path,
-    *,
-    package_loader: Callable[[Path], Any] | None = None,
 ) -> MobileReleaseReport:
-    """Inspect the fixed release layout and always return a fail-closed report."""
+    """Re-execute the fixed production release and return a fail-closed report."""
+    from fluke_model.mobile_release_builder import reexecute_mobile_release
+
+    return _verify_mobile_release_directory_entry(
+        release_dir,
+        package_loader=None,
+        runtime_validator=reexecute_mobile_release,
+    )
+
+
+def _verify_mobile_release_directory_for_testing(
+    release_dir: Path,
+    *,
+    package_loader: Callable[[Path], Any],
+    runtime_validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
+) -> MobileReleaseReport:
+    """Exercise verifier contracts with explicit test-only execution adapters."""
+    return _verify_mobile_release_directory_entry(
+        release_dir,
+        package_loader=package_loader,
+        runtime_validator=runtime_validator,
+    )
+
+
+def _verify_mobile_release_directory_entry(
+    release_dir: Path,
+    *,
+    package_loader: Callable[[Path], Any] | None,
+    runtime_validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
+) -> MobileReleaseReport:
     raw_root = Path(release_dir)
     try:
         reject_symlink_components(raw_root, "release directory")
@@ -161,7 +189,11 @@ def verify_mobile_release_directory(
         return failed_mobile_release_report(str(error))
     root = raw_root.resolve(strict=False)
     try:
-        report = _verify_mobile_release_directory(root, package_loader=package_loader)
+        report = _verify_mobile_release_directory(
+            root,
+            package_loader=package_loader,
+            runtime_validator=runtime_validator,
+        )
     except _EXPECTED_INPUT_ERRORS as error:
         detail = normalize_external_detail(f"release input validation failed: {error}", root)
         report = failed_mobile_release_report(detail)
@@ -246,6 +278,7 @@ def _verify_mobile_release_directory(
     release_dir: Path,
     *,
     package_loader: Callable[[Path], Any] | None,
+    runtime_validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
 ) -> MobileReleaseReport:
     paths = release_paths(release_dir)
     path_validation = validate_input_layout(paths)
@@ -262,6 +295,7 @@ def _verify_mobile_release_directory(
         margin_threshold=manifest.margin_threshold if manifest is not None else None,
         catalog_rows=catalog.validated.rows if catalog.validated is not None else None,
     )
+    runtime = _inspect_runtime_reexecution(paths, catalog, runtime_validator)
     evidence = _directory_evidence(
         path_validation,
         package,
@@ -269,6 +303,7 @@ def _verify_mobile_release_directory(
         rights,
         embeddings,
         evaluations,
+        runtime,
     )
     return verify_mobile_release(evidence)
 
@@ -280,6 +315,7 @@ def _directory_evidence(
     rights: ValidationEvidence,
     embeddings: EmbeddingEvidence,
     evaluations: EvaluationEvidence,
+    runtime: ValidationEvidence,
 ) -> MobileReleaseEvidence:
     return MobileReleaseEvidence(
         parity_cosine=embeddings.parity_cosine,
@@ -298,9 +334,26 @@ def _directory_evidence(
             embeddings.shape_validation,
             embeddings.norm_validation,
             evaluations.validation,
+            runtime,
         ),
         model_package_sha256=package.digest,
         catalog_manifest_sha256=catalog.digest,
+    )
+
+
+def _inspect_runtime_reexecution(
+    paths: ReleasePaths,
+    catalog: _CatalogEvidence,
+    validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
+) -> ValidationEvidence:
+    if catalog.validated is None:
+        return failed("runtime_reexecution", "catalog unavailable for runtime re-execution")
+    try:
+        valid, detail = validator(paths, catalog.validated)
+    except _EXPECTED_INPUT_ERRORS as error:
+        return failed("runtime_reexecution", str(error))
+    return passed("runtime_reexecution", detail) if valid else failed(
+        "runtime_reexecution", detail
     )
 
 

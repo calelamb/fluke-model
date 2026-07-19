@@ -17,9 +17,10 @@ from fluke_model.mobile_release_builder import (
     EvaluationPlan,
     build_mobile_release,
     load_evaluation_plan,
-    load_production_runtimes,
+    _load_production_runtimes,
     rank_catalog,
     require_production_approval,
+    _normalized,
 )
 
 RIGHTS_FIXTURE = Path(__file__).parent / "fixtures" / "mobile-catalog" / "rights-attestation.json"
@@ -53,6 +54,18 @@ def test_evaluation_plan_rejects_test_purpose_for_production(tmp_path: Path) -> 
                 "approvedBy": "Synthetic fixture generator",
                 "approvedAt": "2026-07-19T00:00:00+00:00",
                 "provenanceUrl": "https://example.invalid/test-plan",
+                "scoreThreshold": 0.7,
+                "marginThreshold": 0.1,
+                "runtimeVersions": {
+                    "coremltools": "9.0",
+                    "macos": "26.5.1",
+                    "numpy": "2.2.6",
+                    "pillow": "12.3.0",
+                    "python": "3.11.15",
+                    "torch": "2.13.0",
+                    "transformers": "5.14.0",
+                    "xcode": "26.0.1 (17A400)",
+                },
                 "cohortDefinitions": {
                     name: "Synthetic contract fixture only"
                     for name in (
@@ -80,13 +93,24 @@ def test_reference_limit_matches_ios_loader_contract() -> None:
     assert MAXIMUM_REFERENCE_COUNT == 50_000
 
 
+def test_runtime_embedding_is_validated_without_renormalization() -> None:
+    embedding = np.zeros(384, dtype=np.float32)
+    embedding[0] = np.float32(1.0005)
+
+    validated = _normalized(embedding, "fixture")
+
+    assert np.array_equal(validated, embedding)
+    with pytest.raises(ValueError, match="iOS tolerance"):
+        _normalized(embedding * np.float32(0.5), "fixture")
+
+
 def test_production_runtime_fails_instead_of_faking_coreml_off_macos(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr("fluke_model.mobile_release_builder.platform.system", lambda: "Linux")
 
     with pytest.raises(RuntimeError, match="requires executable Core ML on macOS"):
-        load_production_runtimes(
+        _load_production_runtimes(
             model_artifact_dir=tmp_path / "artifact",
             model_package_path=tmp_path / "model.mlpackage",
         )
@@ -98,6 +122,9 @@ def test_evaluation_plan_is_immutable() -> None:
         approved_by="fixture",
         approved_at="2026-07-19T00:00:00+00:00",
         provenance_url="https://example.invalid/test",
+        score_threshold=0.7,
+        margin_threshold=0.1,
+        runtime_versions=(("python", "3.11.15"),),
         cohort_definitions=(("parity", "test"),),
     )
 
@@ -142,6 +169,18 @@ def test_builder_rejects_test_inputs_without_running_or_publishing(tmp_path: Pat
                 "approvedBy": "Synthetic fixture generator",
                 "approvedAt": "2026-07-19T00:00:00+00:00",
                 "provenanceUrl": "https://example.invalid/test-plan",
+                "scoreThreshold": 0.7,
+                "marginThreshold": 0.1,
+                "runtimeVersions": {
+                    "coremltools": "9.0",
+                    "macos": "26.5.1",
+                    "numpy": "2.2.6",
+                    "pillow": "12.3.0",
+                    "python": "3.11.15",
+                    "torch": "2.13.0",
+                    "transformers": "5.14.0",
+                    "xcode": "26.0.1 (17A400)",
+                },
                 "cohortDefinitions": {
                     name: "Synthetic test cohort"
                     for name in (
@@ -177,6 +216,6 @@ def test_builder_rejects_test_inputs_without_running_or_publishing(tmp_path: Pat
             model_package_path=package,
             export_metadata_path=metadata,
             output_dir=output,
-            options=BuildOptions("test", 1, 1, 0.7, 0.1),
+            options=BuildOptions("test", 1, 1),
         )
     assert not output.exists()

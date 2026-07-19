@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import platform
 import shutil
+import subprocess
 import tempfile
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -32,13 +32,9 @@ from fluke_model.mobile_catalog import (
     _load_mobile_rights,
     sha256_file,
     write_mobile_catalog,
+    validate_published_mobile_catalog,
 )
 from fluke_model.mobile_export import mobile_model_contract
-from fluke_model.mobile_release import (
-    report_payload,
-    verify_mobile_release_directory,
-    write_mobile_release_report,
-)
 from fluke_model.mobile_release_contracts import REPORT_FILENAME
 from fluke_model.mobile_release_evidence import (
     CorpusManifest,
@@ -48,9 +44,16 @@ from fluke_model.mobile_release_evidence import (
     canonical_fixture_payload,
     fixture_set_sha256,
     load_corpus_manifest,
+    load_published_fixture_rows,
     recompute_metrics,
 )
 from fluke_model.model_artifact import DINOV2_ARTIFACT_SHA256, verify_dinov2_artifact
+from fluke_model.secure_snapshot import (
+    publish_directory_no_replace,
+    snapshot_relative_file,
+    snapshot_regular_file,
+    snapshot_tree,
+)
 
 MAXIMUM_REFERENCE_COUNT = 50_000
 MODEL_VERSION = "dinov2-small-coreml-v1"
@@ -62,8 +65,21 @@ _PLAN_KEYS = {
     "approvedAt",
     "provenanceUrl",
     "cohortDefinitions",
+    "scoreThreshold",
+    "marginThreshold",
+    "runtimeVersions",
 }
 _COHORTS = ("parity", "closedSetRetrieval", *OPEN_EVALUATION_TYPES)
+_RUNTIME_VERSION_KEYS = {
+    "coremltools",
+    "macos",
+    "numpy",
+    "pillow",
+    "python",
+    "torch",
+    "transformers",
+    "xcode",
+}
 _IMAGE_MEAN = np.array((0.485, 0.456, 0.406), dtype=np.float32)
 _IMAGE_STD = np.array((0.229, 0.224, 0.225), dtype=np.float32)
 _MAX_IMAGE_PIXELS = 40_000_000
@@ -77,10 +93,14 @@ class EvaluationPlan:
     approved_by: str
     approved_at: str
     provenance_url: str
+    score_threshold: float
+    margin_threshold: float
+    runtime_versions: tuple[tuple[str, str], ...]
     cohort_definitions: tuple[tuple[str, str], ...]
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "cohort_definitions", tuple(self.cohort_definitions))
+        object.__setattr__(self, "runtime_versions", tuple(self.runtime_versions))
 
 
 @dataclass(frozen=True)
@@ -90,12 +110,10 @@ class BuildOptions:
     manifest_version: str
     minimum_app_build: int
     maximum_app_build: int
-    score_threshold: float
-    margin_threshold: float
 
 
 @dataclass(frozen=True)
-class EmbeddingRuntimes:
+class _EmbeddingRuntimes:
     """Real model execution boundaries; injectable only below the production CLI."""
 
     pytorch: Callable[[np.ndarray], np.ndarray]
@@ -121,6 +139,9 @@ def load_evaluation_plan(path: Path) -> EvaluationPlan:
         approved_by=_text(payload["approvedBy"], "approvedBy"),
         approved_at=approved_at,
         provenance_url=_https(payload["provenanceUrl"], "provenanceUrl"),
+        score_threshold=_threshold(payload["scoreThreshold"], "scoreThreshold"),
+        margin_threshold=_threshold(payload["marginThreshold"], "marginThreshold"),
+        runtime_versions=_runtime_versions(payload["runtimeVersions"]),
         cohort_definitions=tuple(
             (name, _text(definitions[name], f"cohortDefinitions.{name}"))
             for name in sorted(definitions)
@@ -186,7 +207,6 @@ def build_mobile_release(
     export_metadata_path: Path,
     output_dir: Path,
     options: BuildOptions,
-    runtimes: EmbeddingRuntimes | None = None,
 ) -> Mapping[str, object]:
     """Build into a fresh sibling staging directory, verify, then atomically publish."""
     sources = (
@@ -218,25 +238,25 @@ def build_mobile_release(
         required_purpose="production",
     )
     _validate_options(options)
-    active_runtimes = runtimes or load_production_runtimes(
-        model_artifact_dir=model_artifact_dir,
-        model_package_path=model_package_path,
-    )
     return _stage_release(
         manifest=manifest,
         plan=plan,
+        corpus_root=corpus_root,
         rights_path=rights_path,
+        model_artifact_dir=model_artifact_dir,
         model_package_path=model_package_path,
         export_metadata_path=export_metadata_path,
         output_dir=output_dir,
         options=options,
-        runtimes=active_runtimes,
     )
 
 
-def load_production_runtimes(
-    *, model_artifact_dir: Path, model_package_path: Path
-) -> EmbeddingRuntimes:
+def _load_production_runtimes(
+    *,
+    model_artifact_dir: Path,
+    model_package_path: Path,
+    expected_versions: Mapping[str, str] | None = None,
+) -> _EmbeddingRuntimes:
     """Load the pinned PyTorch artifact and executable Core ML package or fail."""
     if platform.system() != "Darwin":
         raise RuntimeError("production mobile release requires executable Core ML on macOS")
@@ -252,6 +272,8 @@ def load_production_runtimes(
         coreml_model = coremltools.models.MLModel(
             str(model_package_path), compute_units=coremltools.ComputeUnit.CPU_ONLY
         )
+        if expected_versions is not None:
+            _validate_runtime_versions(expected_versions, coremltools)
     except Exception as error:
         raise RuntimeError(f"production model runtime could not be loaded: {error}") from error
 
@@ -267,31 +289,50 @@ def load_production_runtimes(
         except Exception as error:
             raise RuntimeError(f"Core ML prediction failed: {error}") from error
 
-    return EmbeddingRuntimes(pytorch=pytorch_embed, coreml=coreml_embed)
+    return _EmbeddingRuntimes(pytorch=pytorch_embed, coreml=coreml_embed)
 
 
 def _stage_release(
     *,
     manifest: CorpusManifest,
     plan: EvaluationPlan,
+    corpus_root: Path,
     rights_path: Path,
+    model_artifact_dir: Path,
     model_package_path: Path,
     export_metadata_path: Path,
     output_dir: Path,
     options: BuildOptions,
-    runtimes: EmbeddingRuntimes,
 ) -> Mapping[str, object]:
+    from fluke_model.mobile_release import (
+        report_payload,
+        verify_mobile_release_directory,
+        write_mobile_release_report,
+    )
     destination = Path(output_dir)
     if destination.exists():
         raise FileExistsError("mobile release output must not already exist")
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{destination.name}.staging-", dir=destination.parent))
     try:
-        shutil.copytree(model_package_path, staging / COREML_PACKAGE_NAME)
-        shutil.copy2(export_metadata_path, staging / EXPORT_METADATA_NAME)
-        shutil.copy2(rights_path, staging / "rights-attestation.json")
-        embeddings = _embed_corpus(manifest, runtimes)
-        catalog_rows, catalog_vectors = _catalog_inputs(manifest, embeddings)
+        snapshot_tree(model_package_path, staging / COREML_PACKAGE_NAME)
+        snapshot_tree(model_artifact_dir, staging / "source-model")
+        snapshot_regular_file(export_metadata_path, staging / EXPORT_METADATA_NAME)
+        snapshot_regular_file(rights_path, staging / "rights-attestation.json")
+        evaluation = staging / "evaluation"
+        fixtures = evaluation / "fixtures"
+        fixtures.mkdir(parents=True)
+        snapshot_manifest = _snapshot_corpus(manifest, corpus_root, fixtures)
+        _require_package_metadata_digest(
+            staging / EXPORT_METADATA_NAME, package_tree_sha256(staging / COREML_PACKAGE_NAME)
+        )
+        runtimes = _load_production_runtimes(
+            model_artifact_dir=staging / "source-model",
+            model_package_path=staging / COREML_PACKAGE_NAME,
+            expected_versions=dict(plan.runtime_versions),
+        )
+        embeddings = _embed_corpus(snapshot_manifest, runtimes)
+        catalog_rows, catalog_vectors = _catalog_inputs(snapshot_manifest, embeddings)
         package_digest = package_tree_sha256(staging / COREML_PACKAGE_NAME)
         catalog_release = MobileCatalogRelease(
             manifest_version=options.manifest_version,
@@ -305,19 +346,18 @@ def _stage_release(
             minimum_app_build=options.minimum_app_build,
             maximum_app_build=options.maximum_app_build,
             score_semantics=SCORE_SEMANTICS,
-            score_threshold=options.score_threshold,
-            margin_threshold=options.margin_threshold,
+            score_threshold=plan.score_threshold,
+            margin_threshold=plan.margin_threshold,
             rights_attestation_path=staging / "rights-attestation.json",
         )
         write_mobile_catalog(staging / "catalog", catalog_vectors, catalog_rows, catalog_release)
         _write_evaluation(
             staging,
-            manifest,
+            snapshot_manifest,
             plan,
             embeddings,
             catalog_rows,
             catalog_vectors,
-            options,
         )
         report = verify_mobile_release_directory(staging)
         write_mobile_release_report(staging / REPORT_FILENAME, report)
@@ -326,15 +366,81 @@ def _stage_release(
             raise ValueError(
                 f"staged mobile release failed verification gates: {', '.join(failed)}"
             )
-        os.replace(staging, destination)
+        publish_directory_no_replace(staging, destination)
         return report_payload(report)
     finally:
         if staging.exists():
             shutil.rmtree(staging)
 
 
+def reexecute_mobile_release(paths: object, catalog: object) -> tuple[bool, str]:
+    """Independently execute staged artifacts and compare all caller-supplied evidence."""
+    snapshot_parent = Path(tempfile.mkdtemp(prefix="orcawatch-release-verification-"))
+    try:
+        from fluke_model.mobile_release_contracts import release_paths
+
+        snapshot_root = snapshot_parent / "release"
+        snapshot_tree(getattr(paths, "root"), snapshot_root)
+        verified_paths = release_paths(snapshot_root)
+        verified_catalog = validate_published_mobile_catalog(verified_paths.catalog_dir)
+        plan = load_evaluation_plan(verified_paths.evaluation_plan)
+        runtimes = _load_production_runtimes(
+            model_artifact_dir=verified_paths.source_model,
+            model_package_path=verified_paths.package,
+            expected_versions=dict(plan.runtime_versions),
+        )
+        rows = _bind_release_fixture_paths(
+            load_published_fixture_rows(verified_paths.fixture_manifest),
+            verified_paths.fixture_images,
+        )
+        manifest = CorpusManifest("production", plan.provenance_url, rows)
+        embeddings = _embed_corpus(manifest, runtimes)
+        parity = tuple(row for row in rows if "parity" in row.roles)
+        expected_pytorch = np.stack([embeddings[row.fixture_id][0] for row in parity])
+        expected_coreml = np.stack([embeddings[row.fixture_id][1] for row in parity])
+        actual_pytorch = np.load(verified_paths.pytorch_embeddings, allow_pickle=False)
+        actual_coreml = np.load(verified_paths.coreml_embeddings, allow_pickle=False)
+        if not np.array_equal(actual_pytorch, expected_pytorch) or not np.array_equal(
+            actual_coreml, expected_coreml
+        ):
+            raise ValueError("parity arrays do not match independent runtime execution")
+        catalog_rows = tuple(verified_catalog.rows)
+        vectors = np.fromfile(verified_paths.catalog_vectors, dtype="<f2").astype(np.float32)
+        vectors = vectors.reshape(len(catalog_rows), 384)
+        by_reference = {row.reference_photo_id: row for row in rows if "reference" in row.roles}
+        expected_vectors = np.stack(
+            [embeddings[by_reference[row.reference_photo_id].fixture_id][1] for row in catalog_rows]
+        )
+        if not np.array_equal(vectors, expected_vectors.astype("<f2").astype(np.float32)):
+            raise ValueError("catalog vectors do not match independent Core ML execution")
+        decisions = _build_decisions(manifest, embeddings, vectors, catalog_rows, plan)
+        expected = canonical_decisions_payload(
+            decisions,
+            score_threshold=plan.score_threshold,
+            margin_threshold=plan.margin_threshold,
+        )
+        if verified_paths.raw_decisions.read_bytes() != expected:
+            raise ValueError("raw decisions do not match independent runtime execution")
+    except (OSError, RuntimeError, ValueError, TypeError) as error:
+        return False, str(error)
+    finally:
+        shutil.rmtree(snapshot_parent, ignore_errors=True)
+    return True, "pinned PyTorch and shipped Core ML evidence independently re-executed"
+
+
+def _bind_release_fixture_paths(rows: tuple[object, ...], root: Path) -> tuple[object, ...]:
+    bound = []
+    for row in rows:
+        path = root / getattr(row, "relative_path")
+        digest = sha256_file(path)
+        if digest != getattr(row, "image_sha256"):
+            raise ValueError("release fixture image digest mismatch")
+        bound.append(replace(row, path=path))
+    return tuple(bound)
+
+
 def _embed_corpus(
-    manifest: CorpusManifest, runtimes: EmbeddingRuntimes
+    manifest: CorpusManifest, runtimes: _EmbeddingRuntimes
 ) -> dict[str, tuple[np.ndarray | None, np.ndarray]]:
     results: dict[str, tuple[np.ndarray | None, np.ndarray]] = {}
     for row in manifest.rows:
@@ -395,10 +501,8 @@ def _write_evaluation(
     embeddings: Mapping[str, tuple[np.ndarray | None, np.ndarray]],
     catalog_rows: tuple[ReferenceRow, ...],
     catalog_vectors: np.ndarray,
-    options: BuildOptions,
 ) -> None:
     evaluation = staging / "evaluation"
-    evaluation.mkdir()
     _write_json(
         evaluation / "evaluation-plan.json",
         {
@@ -407,6 +511,9 @@ def _write_evaluation(
             "approvedBy": plan.approved_by,
             "approvedAt": plan.approved_at,
             "provenanceUrl": plan.provenance_url,
+            "scoreThreshold": plan.score_threshold,
+            "marginThreshold": plan.margin_threshold,
+            "runtimeVersions": dict(plan.runtime_versions),
             "cohortDefinitions": dict(plan.cohort_definitions),
         },
     )
@@ -419,15 +526,28 @@ def _write_evaluation(
     np.save(evaluation / "parity-coreml.npy", coreml, allow_pickle=False)
     (evaluation / "fixture-manifest.json").write_bytes(canonical_fixture_payload(manifest.rows))
     ios_vectors = catalog_vectors.astype("<f2").astype(np.float32)
-    decisions = _build_decisions(manifest, embeddings, ios_vectors, catalog_rows, options)
+    decisions = _build_decisions(manifest, embeddings, ios_vectors, catalog_rows, plan)
     (evaluation / "decisions.json").write_bytes(
         canonical_decisions_payload(
             decisions,
-            score_threshold=options.score_threshold,
-            margin_threshold=options.margin_threshold,
+            score_threshold=plan.score_threshold,
+            margin_threshold=plan.margin_threshold,
         )
     )
-    _write_reports(staging, plan, manifest, decisions, options)
+    _write_reports(staging, plan, manifest, decisions)
+
+
+def _snapshot_corpus(
+    manifest: CorpusManifest, corpus_root: Path, destination: Path
+) -> CorpusManifest:
+    rows = []
+    for row in manifest.rows:
+        target = destination / row.relative_path
+        digest = snapshot_relative_file(corpus_root, row.relative_path, target)
+        if digest != row.image_sha256:
+            raise ValueError(f"fixture image changed before authenticated snapshot: {row.fixture_id}")
+        rows.append(replace(row, path=target))
+    return CorpusManifest(manifest.purpose, manifest.provenance_url, tuple(rows))
 
 
 def _build_decisions(
@@ -435,7 +555,7 @@ def _build_decisions(
     embeddings: Mapping[str, tuple[np.ndarray | None, np.ndarray]],
     catalog_vectors: np.ndarray,
     catalog_rows: tuple[ReferenceRow, ...],
-    options: BuildOptions,
+    plan: EvaluationPlan,
 ) -> tuple[DecisionRecord, ...]:
     decisions: list[DecisionRecord] = []
     evaluation_types = {"closedSetRetrieval", *OPEN_EVALUATION_TYPES}
@@ -446,7 +566,7 @@ def _build_decisions(
             )
             top_score = ranked[0][2]
             second_score = ranked[1][2] if len(ranked) > 1 else -1.0
-            accepted = _eligible(ranked, options)
+            accepted = _eligible(ranked, plan)
             decisions.append(
                 DecisionRecord(
                     fixture_id=row.fixture_id,
@@ -463,14 +583,14 @@ def _build_decisions(
     return tuple(decisions)
 
 
-def _eligible(ranked: tuple[tuple[str, str, float], ...], options: BuildOptions) -> bool:
+def _eligible(ranked: tuple[tuple[str, str, float], ...], plan: EvaluationPlan) -> bool:
     first = np.float32(ranked[0][2])
-    if first < np.float32(options.score_threshold):
+    if first < np.float32(plan.score_threshold):
         return False
     if len(ranked) == 1:
         return True
     margin = first - np.float32(ranked[1][2]) + np.finfo(np.float32).eps
-    return bool(margin >= np.float32(options.margin_threshold))
+    return bool(margin >= np.float32(plan.margin_threshold))
 
 
 def _write_reports(
@@ -478,7 +598,6 @@ def _write_reports(
     plan: EvaluationPlan,
     manifest: CorpusManifest,
     decisions: tuple[DecisionRecord, ...],
-    options: BuildOptions,
 ) -> None:
     evaluation = staging / "evaluation"
     package_digest = package_tree_sha256(staging / COREML_PACKAGE_NAME)
@@ -486,8 +605,8 @@ def _write_reports(
     fixture_digest = fixture_set_sha256(manifest.rows)
     metrics = recompute_metrics(
         decisions,
-        score_threshold=options.score_threshold,
-        margin_threshold=options.margin_threshold,
+        score_threshold=plan.score_threshold,
+        margin_threshold=plan.margin_threshold,
     )
     common = {
         "schemaVersion": 1,
@@ -542,9 +661,9 @@ def _normalized(value: np.ndarray, name: str) -> np.ndarray:
     if array.shape != (384,) or not np.isfinite(array).all():
         raise ValueError(f"{name} must be a finite 384-vector")
     norm = float(np.linalg.vector_norm(array))
-    if not math.isfinite(norm) or norm <= 0:
-        raise ValueError(f"{name} must have a positive finite norm")
-    return np.ascontiguousarray(array / np.float32(norm), dtype=np.float32)
+    if not math.isfinite(norm) or abs(norm - 1.0) > 0.001:
+        raise ValueError(f"{name} must be L2 normalized within the iOS tolerance")
+    return np.ascontiguousarray(array, dtype=np.float32)
 
 
 def _validate_options(options: BuildOptions) -> None:
@@ -558,18 +677,6 @@ def _validate_options(options: BuildOptions) -> None:
         or options.maximum_app_build < options.minimum_app_build
     ):
         raise ValueError("app build range must contain ordered positive integers")
-    for name, value in (
-        ("score threshold", options.score_threshold),
-        ("margin threshold", options.margin_threshold),
-    ):
-        if (
-            isinstance(value, bool)
-            or not isinstance(value, (int, float))
-            or not math.isfinite(value)
-        ):
-            raise ValueError(f"{name} must be finite and within [-1, 1]")
-        if not -1 <= value <= 1:
-            raise ValueError(f"{name} must be finite and within [-1, 1]")
 
 
 def _require_package_metadata_digest(path: Path, package_digest: str) -> None:
@@ -633,6 +740,52 @@ def _timestamp(value: object) -> str:
     if parsed.tzinfo is None or parsed.utcoffset() is None:
         raise ValueError("approvedAt must include a timezone")
     return text
+
+
+def _threshold(value: object, name: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{name} must be finite and within [-1, 1]")
+    result = float(value)
+    if not math.isfinite(result) or not -1 <= result <= 1:
+        raise ValueError(f"{name} must be finite and within [-1, 1]")
+    return result
+
+
+def _runtime_versions(value: object) -> tuple[tuple[str, str], ...]:
+    if not isinstance(value, dict) or set(value) != _RUNTIME_VERSION_KEYS:
+        raise ValueError("runtimeVersions fields do not match the exact schema")
+    return tuple((name, _text(value[name], f"runtimeVersions.{name}")) for name in sorted(value))
+
+
+def _validate_runtime_versions(expected: Mapping[str, str], coremltools: object) -> None:
+    import PIL
+    import transformers
+
+    xcode_lines = (
+        subprocess.run(
+            ["/usr/bin/xcodebuild", "-version"], capture_output=True, check=True, text=True
+        )
+        .stdout.strip()
+        .splitlines()
+    )
+    if len(xcode_lines) != 2:
+        raise RuntimeError("xcode version output does not match the audited format")
+    xcode = (
+        f"{xcode_lines[0].removeprefix('Xcode ')} ({xcode_lines[1].removeprefix('Build version ')})"
+    )
+    observed = {
+        "coremltools": str(getattr(coremltools, "__version__")),
+        "macos": platform.mac_ver()[0],
+        "numpy": np.__version__,
+        "pillow": PIL.__version__,
+        "python": platform.python_version(),
+        "torch": torch.__version__,
+        "transformers": transformers.__version__,
+        "xcode": xcode,
+    }
+    if dict(expected) != observed:
+        mismatch = next(name for name in sorted(observed) if expected.get(name) != observed[name])
+        raise RuntimeError(f"production runtime version does not match approved plan: {mismatch}")
 
 
 def _write_json(path: Path, payload: object) -> None:

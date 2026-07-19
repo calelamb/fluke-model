@@ -2,20 +2,19 @@
 
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 from fluke_model.mobile_catalog import MobileCatalogManifest, validate_published_mobile_catalog
-from fluke_model.mobile_release import verify_mobile_release_directory
+from fluke_model.mobile_release import MobileReleaseReport, verify_mobile_release_directory
 from fluke_model.mobile_release_builder import (
     INDEX_VERSION,
     MAXIMUM_REFERENCE_COUNT,
     MODEL_VERSION,
 )
+from fluke_model.secure_snapshot import publish_directory_no_replace, snapshot_regular_file
 
 _CATALOG_FILES = ("manifest.json", "metadata.json", "references.f16")
 
@@ -25,9 +24,39 @@ def export_verified_mobile_catalog(
     output_dir: Path,
     *,
     app_build: int,
-    package_loader: Callable[[Path], Any] | None = None,
 ) -> MobileCatalogManifest:
     """Reverify a release, enforce iOS compatibility, and copy exactly three files."""
+    return _export_verified_mobile_catalog(
+        release_dir,
+        output_dir,
+        app_build=app_build,
+        verifier=verify_mobile_release_directory,
+    )
+
+
+def _export_verified_mobile_catalog_for_testing(
+    release_dir: Path,
+    output_dir: Path,
+    *,
+    app_build: int,
+    verifier: Callable[[Path], MobileReleaseReport],
+) -> MobileCatalogManifest:
+    """Exercise catalog export with an explicit test-only release verifier."""
+    return _export_verified_mobile_catalog(
+        release_dir,
+        output_dir,
+        app_build=app_build,
+        verifier=verifier,
+    )
+
+
+def _export_verified_mobile_catalog(
+    release_dir: Path,
+    output_dir: Path,
+    *,
+    app_build: int,
+    verifier: Callable[[Path], MobileReleaseReport],
+) -> MobileCatalogManifest:
     release = Path(release_dir)
     output = Path(output_dir)
     _reject_symlinks(release, "mobile release")
@@ -44,7 +73,7 @@ def export_verified_mobile_catalog(
         raise FileExistsError("catalog output must not already exist")
     if isinstance(app_build, bool) or not isinstance(app_build, int) or app_build <= 0:
         raise ValueError("app build must be a positive integer")
-    report = verify_mobile_release_directory(release, package_loader=package_loader)
+    report = verifier(release)
     if not report.ready:
         failed = tuple(gate.name for gate in report.gates if not gate.passed)
         raise ValueError(f"mobile release is not verified: {', '.join(failed)}")
@@ -60,11 +89,11 @@ def export_verified_mobile_catalog(
     staging = Path(tempfile.mkdtemp(prefix=f".{output.name}.staging-", dir=output.parent))
     try:
         for name in _CATALOG_FILES:
-            shutil.copy2(release / "catalog" / name, staging / name)
+            snapshot_regular_file(release / "catalog" / name, staging / name)
         copied = validate_published_mobile_catalog(staging)
         if copied.manifest_sha256 != validated.manifest_sha256:
             raise ValueError("exported catalog digest changed during publication")
-        os.replace(staging, output)
+        publish_directory_no_replace(staging, output)
         return copied.manifest
     finally:
         if staging.exists():

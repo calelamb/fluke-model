@@ -235,8 +235,12 @@ def recompute_metrics(
     result: dict[str, dict[str, int | float]] = {}
     closed = grouped.get("closedSetRetrieval", [])
     if closed:
-        top1 = sum(item.ranked_whale_ids[0] == item.truth_whale_id for item in closed)
-        top3 = sum(item.truth_whale_id in item.ranked_whale_ids[:3] for item in closed)
+        top1 = sum(
+            item.accepted and item.ranked_whale_ids[0] == item.truth_whale_id for item in closed
+        )
+        top3 = sum(
+            item.accepted and item.truth_whale_id in item.ranked_whale_ids[:3] for item in closed
+        )
         result["closedSetRetrieval"] = {
             "sampleCount": len(closed),
             "top1": top1 / len(closed),
@@ -368,6 +372,7 @@ def _reject_duplicate_rows(rows: tuple[FixtureRow, ...]) -> None:
     identities = (
         ("fixtureId", tuple(row.fixture_id for row in rows)),
         ("relativePath", tuple(row.relative_path for row in rows)),
+        ("imageSha256", tuple(row.image_sha256 for row in rows)),
     )
     for name, values in identities:
         if len(set(values)) != len(values):
@@ -377,6 +382,8 @@ def _reject_duplicate_rows(rows: tuple[FixtureRow, ...]) -> None:
     )
     if len(set(reference_ids)) != len(reference_ids):
         raise ValueError("corpus manifest contains duplicate referencePhotoId")
+    if any("reference" in row.roles and len(row.roles) != 1 for row in rows):
+        raise ValueError("reference fixtures must be disjoint from all evaluation roles")
 
 
 def _canonical_relative_path(value: object) -> str:

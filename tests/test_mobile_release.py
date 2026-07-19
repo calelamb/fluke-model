@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -29,7 +30,7 @@ from fluke_model.mobile_release import (
     report_payload,
     validate_report_destination,
     verify_mobile_release,
-    verify_mobile_release_directory as _verify_mobile_release_directory,
+    _verify_mobile_release_directory_for_testing,
     write_mobile_release_report,
 )
 from fluke_model.mobile_release_evidence import (
@@ -54,6 +55,7 @@ BOUNDARY_NAMES = (
     "embedding_shape",
     "embedding_norm",
     "required_reports",
+    "runtime_reexecution",
 )
 OPEN_COHORTS = ("openSet", "nonOrca", "poorQuality", "occlusion", "distributionShift")
 SYNTHETIC_PACKAGE_SHA256 = "a" * 64
@@ -76,9 +78,10 @@ def _valid_coreml_spec() -> object:
 
 def verify_mobile_release_directory(release_dir: Path):
     """Validate synthetic test packages only at the package-loader boundary."""
-    return _verify_mobile_release_directory(
+    return _verify_mobile_release_directory_for_testing(
         release_dir,
         package_loader=lambda _isolated_package: _valid_coreml_spec(),
+        runtime_validator=lambda _paths, _catalog: (True, "synthetic test runtime evidence"),
     )
 
 
@@ -173,6 +176,10 @@ def build_release_fixture(tmp_path: Path) -> Path:
     package = release_dir / "FlukeEmbedder.mlpackage"
     (package / "Data").mkdir(parents=True)
     (package / "Manifest.json").write_text("synthetic-package", encoding="utf-8")
+    source_model = release_dir / "source-model"
+    source_model.mkdir()
+    for filename in DINOV2_ARTIFACT_SHA256:
+        (source_model / filename).write_text("synthetic test artifact", encoding="utf-8")
     package_digest = package_tree_sha256(package)
     _write_json(release_dir / "export-metadata.json", _export_metadata(package_digest))
     rights = release_dir / "rights-attestation.json"
@@ -233,6 +240,18 @@ def _write_evaluation_fixture(release_dir: Path, package_digest: str, catalog_di
             "approvedBy": "Synthetic verifier contract fixture",
             "approvedAt": "2026-07-19T00:00:00+00:00",
             "provenanceUrl": "https://example.invalid/orcawatch/production-evaluation",
+            "scoreThreshold": 0.7,
+            "marginThreshold": 0.1,
+            "runtimeVersions": {
+                "coremltools": "9.0",
+                "macos": "26.5.1",
+                "numpy": "2.2.6",
+                "pillow": "12.3.0",
+                "python": "3.11.15",
+                "torch": "2.13.0",
+                "transformers": "5.14.0",
+                "xcode": "26.0.1 (17A400)",
+            },
             "cohortDefinitions": {
                 name: "Synthetic verifier contract only"
                 for name in ("parity", "closedSetRetrieval", *OPEN_COHORTS)
@@ -240,6 +259,11 @@ def _write_evaluation_fixture(release_dir: Path, package_digest: str, catalog_di
         },
     )
     fixture_rows, decisions = _raw_evaluation_fixture()
+    fixtures = evaluation / "fixtures"
+    for row in fixture_rows:
+        fixture = fixtures / row.relative_path
+        fixture.parent.mkdir(parents=True, exist_ok=True)
+        fixture.write_bytes(row.fixture_id.encode())
     fixture_digest = fixture_set_sha256(fixture_rows)
     (evaluation / "fixture-manifest.json").write_bytes(canonical_fixture_payload(fixture_rows))
     (evaluation / "decisions.json").write_bytes(
@@ -313,7 +337,7 @@ def _raw_evaluation_fixture() -> tuple[tuple[FixtureRow, ...], tuple[DecisionRec
         FixtureRow(
             fixture_id="synthetic-reference-1",
             relative_path="images/synthetic-reference-1.jpg",
-            image_sha256="d" * 64,
+            image_sha256=hashlib.sha256(b"synthetic-reference-1").hexdigest(),
             roles=("reference",),
             reference_photo_id="synthetic-ref-1",
             whale_id="synthetic-whale-1",
@@ -369,7 +393,7 @@ def _fixture_row(fixture_id: str, role: str, *, whale_id: str | None) -> Fixture
     return FixtureRow(
         fixture_id=fixture_id,
         relative_path=f"images/{fixture_id}.jpg",
-        image_sha256="d" * 64,
+        image_sha256=hashlib.sha256(fixture_id.encode()).hexdigest(),
         roles=(role,),
         reference_photo_id=None,
         whale_id=whale_id,

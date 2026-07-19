@@ -55,6 +55,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/fluke_model"]
 
+[tool.uv]
+package = true
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
