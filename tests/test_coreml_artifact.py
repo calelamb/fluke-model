@@ -6,6 +6,7 @@ import json
 import os
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
@@ -14,6 +15,7 @@ import torch
 from fluke_model.coreml_artifact import (
     CoreMLExportError,
     FixedShapeDINOv2Embedder,
+    _atomic_exchange_directories,
     _canonicalize_coreml_package,
     build_export_metadata,
     export_coreml,
@@ -149,6 +151,66 @@ def _write_nondeterministic_package(
         "rootModelIdentifier": model_identifier,
     }
     (package / "Manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+
+def _valid_coreml_spec() -> object:
+    input_type = SimpleNamespace(shape=[1, 3, 224, 224], dataType=65568)
+    output_type = SimpleNamespace(shape=[1, 384], dataType=65568)
+    return SimpleNamespace(
+        description=SimpleNamespace(
+            input=[
+                SimpleNamespace(
+                    name="pixels",
+                    type=SimpleNamespace(multiArrayType=input_type),
+                )
+            ],
+            output=[
+                SimpleNamespace(
+                    name="embedding",
+                    type=SimpleNamespace(multiArrayType=output_type),
+                )
+            ],
+        )
+    )
+
+
+def _valid_spec_loader(_package_path: Path) -> object:
+    return _valid_coreml_spec()
+
+
+def _test_directory_exchange(first: Path, second: Path) -> None:
+    temporary = first.with_name(f".{first.name}.test-swap")
+    os.replace(first, temporary)
+    os.replace(second, first)
+    os.replace(temporary, second)
+
+
+def test_platform_atomic_directory_exchange_swaps_both_trees(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    second = tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    (first / "first.txt").write_text("first", encoding="utf-8")
+    (second / "second.txt").write_text("second", encoding="utf-8")
+
+    _atomic_exchange_directories(first, second)
+
+    assert (first / "second.txt").read_text(encoding="utf-8") == "second"
+    assert (second / "first.txt").read_text(encoding="utf-8") == "first"
+
+
+def test_platform_atomic_directory_exchange_failure_preserves_tree(tmp_path: Path) -> None:
+    first = tmp_path / "first"
+    missing = tmp_path / "missing"
+    first.mkdir()
+    sentinel = first / "first.txt"
+    sentinel.write_text("first", encoding="utf-8")
+
+    with pytest.raises(OSError):
+        _atomic_exchange_directories(first, missing)
+
+    assert sentinel.read_text(encoding="utf-8") == "first"
+    assert not missing.exists()
 
 
 def test_export_metadata_records_every_reproducibility_input() -> None:
@@ -295,6 +357,37 @@ def test_coreml_package_canonicalization_is_byte_for_byte_deterministic(
     assert manifest["itemInfoEntries"][root_identifier]["name"] == "model.mlmodel"
 
 
+def test_coreml_package_canonicalization_rejects_symlink_ancestor(
+    tmp_path: Path,
+) -> None:
+    package = tmp_path / "unsafe.mlpackage"
+    data = package / "Data"
+    external = tmp_path / "external"
+    data.mkdir(parents=True)
+    external.mkdir()
+    external_model = external / "model.mlmodel"
+    external_model.write_bytes(b"wire-order-external")
+    (data / "com.apple.CoreML").symlink_to(external, target_is_directory=True)
+    manifest = {
+        "fileFormatVersion": "1.0.0",
+        "itemInfoEntries": {
+            "11111111-1111-4111-8111-111111111111": {
+                "author": "com.apple.CoreML",
+                "description": "CoreML Model Specification",
+                "name": "model.mlmodel",
+                "path": "com.apple.CoreML/model.mlmodel",
+            }
+        },
+        "rootModelIdentifier": "11111111-1111-4111-8111-111111111111",
+    }
+    (package / "Manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    with pytest.raises(CoreMLExportError, match="symbolic link|outside package"):
+        _canonicalize_coreml_package(package, _FakeModelMessage)
+
+    assert external_model.read_bytes() == b"wire-order-external"
+
+
 def test_fixed_shape_adapter_matches_original_eager_model() -> None:
     torch.manual_seed(7)
     caller_model = _FakeDINOv2().eval()
@@ -416,8 +509,35 @@ def test_publish_refuses_nonempty_output_without_replace(tmp_path: Path) -> None
 def test_publish_rejects_source_as_output(tmp_path: Path) -> None:
     source = tmp_path / "source"
 
-    with pytest.raises(CoreMLExportError, match="must differ"):
+    with pytest.raises(CoreMLExportError, match="overlap"):
         publish_coreml_export(source, source, replace=False)
+
+
+@pytest.mark.parametrize("output_position", ["parent", "child"])
+def test_publish_rejects_source_output_ancestor_overlap(
+    tmp_path: Path,
+    output_position: str,
+) -> None:
+    artifact_root = tmp_path / "artifacts"
+    source = artifact_root / "dinov2-small"
+    source.mkdir(parents=True)
+    output = artifact_root if output_position == "parent" else source / "mobile-release"
+    called = False
+
+    def fake_exporter(_artifact_dir: Path, _staging_dir: Path) -> object:
+        nonlocal called
+        called = True
+        return object()
+
+    with pytest.raises(CoreMLExportError, match="overlap"):
+        publish_coreml_export(
+            source,
+            output,
+            replace=True,
+            exporter=fake_exporter,
+        )
+
+    assert called is False
 
 
 def test_publish_rejects_ambiguous_output_name(tmp_path: Path) -> None:
@@ -475,6 +595,47 @@ def test_publish_rejects_incomplete_staged_export(tmp_path: Path) -> None:
             tmp_path / "candidate",
             replace=False,
             exporter=incomplete_exporter,
+        )
+
+
+def test_publish_rejects_staged_package_with_invalid_coreml_interface(
+    tmp_path: Path,
+) -> None:
+    def fake_exporter(_artifact_dir: Path, staging_dir: Path) -> object:
+        package = staging_dir / "FlukeEmbedder.mlpackage"
+        package.mkdir()
+        (package / "model.bin").write_bytes(b"model")
+        metadata = build_export_metadata(
+            model_sha256="a" * 64,
+            package_sha256=package_tree_sha256(package),
+            tool_versions={"python": "3.11.9"},
+        )
+        (staging_dir / "export-metadata.json").write_text(
+            json.dumps(metadata.as_json_dict()),
+            encoding="utf-8",
+        )
+        return metadata
+
+    invalid_spec = _valid_coreml_spec()
+    invalid_spec.description.output[0].name = "wrong-output"
+
+    with pytest.raises(CoreMLExportError, match="Core ML.*interface"):
+        publish_coreml_export(
+            tmp_path / "source",
+            tmp_path / "candidate",
+            replace=False,
+            exporter=fake_exporter,
+            spec_loader=lambda _path: invalid_spec,
+        )
+
+    assert not (tmp_path / "candidate").exists()
+    with pytest.raises(CoreMLExportError, match="reload failed"):
+        publish_coreml_export(
+            tmp_path / "source",
+            tmp_path / "candidate-reload",
+            replace=False,
+            exporter=fake_exporter,
+            spec_loader=lambda _path: (_ for _ in ()).throw(ValueError("unreadable")),
         )
 
 
@@ -552,12 +713,58 @@ def test_publish_replaces_output_atomically_and_cleans_staging(tmp_path: Path) -
         output,
         replace=True,
         exporter=fake_export,
+        exchange=_test_directory_exchange,
+        spec_loader=_valid_spec_loader,
     )
 
     assert result.model_sha256 == metadata.model_sha256
     assert not (output / "old.txt").exists()
     assert (output / "FlukeEmbedder.mlpackage" / "model.bin").read_bytes() == b"model"
     assert list(tmp_path.glob(".candidate.*")) == []
+
+
+def test_publish_atomic_exchange_failure_preserves_both_trees(tmp_path: Path) -> None:
+    output = tmp_path / "candidate"
+    output.mkdir()
+    sentinel = output / "old.txt"
+    sentinel.write_text("old", encoding="utf-8")
+
+    def fake_exporter(_artifact_dir: Path, staging_dir: Path) -> object:
+        package = staging_dir / "FlukeEmbedder.mlpackage"
+        package.mkdir()
+        (package / "model.bin").write_bytes(b"new")
+        metadata = build_export_metadata(
+            model_sha256="a" * 64,
+            package_sha256=package_tree_sha256(package),
+            tool_versions={"python": "3.11.9"},
+        )
+        (staging_dir / "export-metadata.json").write_text(
+            json.dumps(metadata.as_json_dict()),
+            encoding="utf-8",
+        )
+        return metadata
+
+    def failing_exchange(first: Path, second: Path) -> None:
+        assert (first / "FlukeEmbedder.mlpackage/model.bin").read_bytes() == b"new"
+        assert (second / "old.txt").read_text(encoding="utf-8") == "old"
+        raise OSError("exchange unavailable")
+
+    with pytest.raises(CoreMLExportError, match="atomic directory exchange failed"):
+        publish_coreml_export(
+            tmp_path / "source",
+            output,
+            replace=True,
+            exporter=fake_exporter,
+            exchange=failing_exchange,
+            spec_loader=_valid_spec_loader,
+        )
+
+    assert sentinel.read_text(encoding="utf-8") == "old"
+    staging_directories = list(tmp_path.glob(".candidate.*.staging"))
+    assert len(staging_directories) == 1
+    assert (
+        staging_directories[0] / "FlukeEmbedder.mlpackage/model.bin"
+    ).read_bytes() == b"new"
 
 
 def test_publish_rejects_metadata_digest_that_does_not_match_package(tmp_path: Path) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ctypes
+import errno
 import hashlib
 import json
 import os
@@ -32,6 +34,10 @@ _PACKAGE_HASH_DOMAIN = b"fluke-coreml-package-v1\0"
 _PREPROCESSOR_CONFIG_FILENAME = "preprocessor_config.json"
 _IMAGENET_MEAN = (0.485, 0.456, 0.406)
 _IMAGENET_STD = (0.229, 0.224, 0.225)
+_COREML_FLOAT32_DATA_TYPE = 65568
+_RENAME_EXCHANGE = 0x00000002
+_DARWIN_AT_FDCWD = -2
+_LINUX_AT_FDCWD = -100
 _COREML_IDENTIFIER_NAMESPACE = uuid5(
     NAMESPACE_URL,
     "https://orcawatch.app/coreml-package/v1",
@@ -249,6 +255,8 @@ def publish_coreml_export(
     *,
     replace: bool,
     exporter: Callable[[Path, Path], ExportMetadata] = export_coreml,
+    exchange: Callable[[Path, Path], None] | None = None,
+    spec_loader: Callable[[Path], Any] | None = None,
 ) -> ExportMetadata:
     """Stage an export beside its destination, then publish it with an atomic rename."""
     source = Path(artifact_dir)
@@ -256,39 +264,31 @@ def publish_coreml_export(
     _validate_publish_destination(source, destination, replace=replace)
     destination.parent.mkdir(parents=True, exist_ok=True)
     staging = _create_staging_directory(destination)
-    backup: Path | None = None
+    preserve_staging = False
     try:
         metadata = exporter(source, staging)
-        _validate_staged_export(staging, metadata)
+        _validate_staged_export(staging, metadata, spec_loader=spec_loader)
         if destination.exists():
-            backup = Path(
-                tempfile.mkdtemp(
-                    prefix=f".{destination.name}.",
-                    suffix=".backup",
-                    dir=destination.parent,
-                )
-            )
-            os.replace(destination, backup)
-        try:
+            exchange_directories = exchange or _atomic_exchange_directories
+            try:
+                exchange_directories(staging, destination)
+            except Exception as error:
+                preserve_staging = True
+                raise CoreMLExportError(
+                    f"atomic directory exchange failed; staged export retained at {staging}: "
+                    f"{error}"
+                ) from error
+            shutil.rmtree(staging)
+        else:
             os.replace(staging, destination)
-        except Exception:
-            if backup is not None and not destination.exists():
-                os.replace(backup, destination)
-                backup = None
-            raise
-        if backup is not None:
-            shutil.rmtree(backup)
-            backup = None
         return metadata
     except CoreMLExportError:
         raise
     except Exception as error:
         raise CoreMLExportError(f"failed to publish Core ML export: {error}") from error
     finally:
-        if staging.exists():
+        if staging.exists() and not preserve_staging:
             shutil.rmtree(staging)
-        if backup is not None and backup.exists():
-            shutil.rmtree(backup)
 
 
 def _convert_coreml_package(
@@ -341,6 +341,72 @@ def _create_staging_directory(destination: Path) -> Path:
             dir=destination.parent,
         )
     )
+
+
+def _atomic_exchange_directories(first: Path, second: Path) -> None:
+    system = platform.system()
+    if system == "Darwin":
+        _renameatx_np_exchange(first, second)
+        return
+    if system == "Linux":
+        _renameat2_exchange(first, second)
+        return
+    raise OSError(errno.ENOTSUP, f"atomic directory exchange is unsupported on {system}")
+
+
+def _renameatx_np_exchange(first: Path, second: Path) -> None:
+    library = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameatx_np = library.renameatx_np
+    except AttributeError as error:
+        raise OSError(errno.ENOSYS, "renameatx_np is unavailable") from error
+    renameatx_np.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    renameatx_np.restype = ctypes.c_int
+    result = renameatx_np(
+        _DARWIN_AT_FDCWD,
+        os.fsencode(first),
+        _DARWIN_AT_FDCWD,
+        os.fsencode(second),
+        _RENAME_EXCHANGE,
+    )
+    _raise_for_exchange_error(result)
+
+
+def _renameat2_exchange(first: Path, second: Path) -> None:
+    library = ctypes.CDLL(None, use_errno=True)
+    try:
+        renameat2 = library.renameat2
+    except AttributeError as error:
+        raise OSError(errno.ENOSYS, "renameat2 is unavailable") from error
+    renameat2.argtypes = (
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_int,
+        ctypes.c_char_p,
+        ctypes.c_uint,
+    )
+    renameat2.restype = ctypes.c_int
+    result = renameat2(
+        _LINUX_AT_FDCWD,
+        os.fsencode(first),
+        _LINUX_AT_FDCWD,
+        os.fsencode(second),
+        _RENAME_EXCHANGE,
+    )
+    _raise_for_exchange_error(result)
+
+
+def _raise_for_exchange_error(result: int) -> None:
+    if result == 0:
+        return
+    error_number = ctypes.get_errno()
+    raise OSError(error_number, os.strerror(error_number))
 
 
 def _validate_sha256(field_name: str, value: str) -> None:
@@ -457,10 +523,33 @@ def _package_data_path(package: Path, entry: Mapping[str, object]) -> Path:
     relative = PurePosixPath(relative_value)
     if relative.is_absolute() or ".." in relative.parts:
         raise CoreMLExportError("Core ML package manifest entry path is unsafe")
-    target = package / "Data" / Path(*relative.parts)
-    if target.is_symlink() or not target.exists():
+    data_root = package / "Data"
+    target = data_root / Path(*relative.parts)
+    _reject_symlink_components(package, target)
+    try:
+        data_root_resolved = data_root.resolve(strict=True)
+        target_resolved = target.resolve(strict=True)
+    except OSError as error:
+        raise CoreMLExportError("Core ML package manifest entry target is missing") from error
+    if not target_resolved.is_relative_to(data_root_resolved):
+        raise CoreMLExportError("Core ML package manifest entry target is outside package Data")
+    if not target.exists():
         raise CoreMLExportError("Core ML package manifest entry target is missing")
     return target
+
+
+def _reject_symlink_components(package: Path, target: Path) -> None:
+    try:
+        relative = target.relative_to(package)
+    except ValueError as error:
+        raise CoreMLExportError("Core ML package target is outside package") from error
+    current = package
+    if current.is_symlink():
+        raise CoreMLExportError("Core ML package path contains a symbolic link")
+    for component in relative.parts:
+        current = current / component
+        if current.is_symlink():
+            raise CoreMLExportError("Core ML package path contains a symbolic link")
 
 
 def _write_bytes_atomic(path: Path, payload: bytes) -> None:
@@ -531,10 +620,10 @@ def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:
 
 
 def _validate_publish_destination(source: Path, destination: Path, *, replace: bool) -> None:
-    source_resolved = source.resolve(strict=False)
-    destination_resolved = destination.resolve(strict=False)
-    if source_resolved == destination_resolved:
-        raise CoreMLExportError("artifact and output directories must differ")
+    source_resolved = source.resolve(strict=source.exists())
+    destination_resolved = destination.resolve(strict=destination.exists())
+    if _paths_overlap(source_resolved, destination_resolved):
+        raise CoreMLExportError("artifact and output directories must not overlap")
     if destination.name in {"", ".", ".."}:
         raise CoreMLExportError("output directory must have an explicit name")
     if destination.is_symlink():
@@ -545,7 +634,16 @@ def _validate_publish_destination(source: Path, destination: Path, *, replace: b
         raise CoreMLExportError("output directory is non-empty; pass --replace to replace it")
 
 
-def _validate_staged_export(staging: Path, metadata: ExportMetadata) -> None:
+def _paths_overlap(first: Path, second: Path) -> bool:
+    return first == second or first in second.parents or second in first.parents
+
+
+def _validate_staged_export(
+    staging: Path,
+    metadata: ExportMetadata,
+    *,
+    spec_loader: Callable[[Path], Any] | None,
+) -> None:
     package_path = staging / COREML_PACKAGE_NAME
     metadata_path = staging / EXPORT_METADATA_NAME
     if not package_path.is_dir() or package_path.is_symlink():
@@ -568,3 +666,58 @@ def _validate_staged_export(staging: Path, metadata: ExportMetadata) -> None:
         raise CoreMLExportError(f"staged export metadata is invalid: {error}") from error
     if serialized_metadata != metadata.as_json_dict():
         raise CoreMLExportError("staged export metadata does not match exporter result")
+    _validate_coreml_package_interface(package_path, spec_loader=spec_loader)
+
+
+def _validate_coreml_package_interface(
+    package_path: Path,
+    *,
+    spec_loader: Callable[[Path], Any] | None,
+) -> None:
+    loader = spec_loader or _load_coreml_package_spec
+    try:
+        spec = _load_isolated_coreml_spec(package_path, loader)
+        inputs = _coreml_feature_contract(spec.description.input)
+        outputs = _coreml_feature_contract(spec.description.output)
+    except CoreMLExportError:
+        raise
+    except Exception as error:
+        raise CoreMLExportError(f"staged Core ML package reload failed: {error}") from error
+    contract = mobile_model_contract()
+    expected_inputs = (("pixels", contract.input_shape, _COREML_FLOAT32_DATA_TYPE),)
+    expected_outputs = (("embedding", contract.output_shape, _COREML_FLOAT32_DATA_TYPE),)
+    if inputs != expected_inputs or outputs != expected_outputs:
+        raise CoreMLExportError("staged Core ML package interface does not match contract")
+
+
+def _load_isolated_coreml_spec(
+    package_path: Path,
+    loader: Callable[[Path], Any],
+) -> Any:
+    with tempfile.TemporaryDirectory(
+        prefix=".coreml-validation.",
+        dir=package_path.parent,
+    ) as temporary_root:
+        validation_package = Path(temporary_root) / package_path.name
+        shutil.copytree(package_path, validation_package)
+        return loader(validation_package)
+
+
+def _coreml_feature_contract(features: Any) -> tuple[tuple[str, tuple[int, ...], int], ...]:
+    return tuple(
+        (
+            feature.name,
+            tuple(feature.type.multiArrayType.shape),
+            feature.type.multiArrayType.dataType,
+        )
+        for feature in features
+    )
+
+
+def _load_coreml_package_spec(package_path: Path) -> Any:
+    try:
+        import coremltools
+    except ImportError as error:
+        raise CoreMLExportError("Core ML package validation dependency is unavailable") from error
+    model = coremltools.models.MLModel(str(package_path), skip_model_load=True)
+    return model.get_spec()
