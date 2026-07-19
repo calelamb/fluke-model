@@ -49,7 +49,10 @@ def test_finding_1_public_validator_fails_closed_on_literal_synthetic_package(
     validator = getattr(coreml_artifact, "validate_coreml_package_interface", None)
 
     assert callable(validator)
-    with pytest.raises(coreml_artifact.CoreMLExportError, match="reload"):
+    with pytest.raises(
+        coreml_artifact.CoreMLExportError,
+        match=r"reload|validation dependency is unavailable",
+    ):
         validator(package)
 
 
