@@ -338,20 +338,10 @@ def validate_report_destination(release_dir: Path, report_path: Path) -> None:
 def normalize_external_detail(detail: object, release_dir: Path) -> str:
     """Replace host-specific release/temp roots before serializing gate evidence."""
     text = str(detail)
-    root = Path(release_dir)
-    candidates = {
-        str(root),
-        str(root.absolute()),
-        str(root.resolve(strict=False)),
-    }
-    temporary = Path(tempfile.gettempdir())
-    temporary_candidates = {
-        str(temporary),
-        str(temporary.absolute()),
-        str(temporary.resolve(strict=False)),
-    }
-    normalized = _replace_path_tokens(text, candidates, "<release-dir>")
-    return _replace_path_tokens(normalized, temporary_candidates, "<temp-dir>")
+    root = Path(release_dir).resolve(strict=False)
+    temporary = Path(tempfile.gettempdir()).resolve(strict=False)
+    normalized = _replace_path_tokens(text, {str(root)}, "<release-dir>")
+    return _replace_path_tokens(normalized, {str(temporary)}, "<temp-dir>")
 
 
 def _replace_path_tokens(text: str, paths: set[str], token: str) -> str:

@@ -148,7 +148,7 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
 
 def verify_mobile_release_directory(release_dir: Path) -> MobileReleaseReport:
     """Inspect the fixed release layout and always return a fail-closed report."""
-    root = Path(release_dir)
+    root = Path(release_dir).resolve(strict=False)
     try:
         report = _verify_mobile_release_directory(root)
     except _EXPECTED_INPUT_ERRORS as error:

@@ -488,6 +488,38 @@ def test_failed_report_details_are_root_independent(
     assert "<release-dir>" in first_bytes.decode()
 
 
+@pytest.mark.parametrize("candidate_name", ("a", "release"))
+def test_failed_report_normalization_canonicalizes_relative_release_roots(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidate_name: str,
+) -> None:
+    candidate = tmp_path / candidate_name
+    candidate.mkdir()
+
+    def fail_catalog(paths: object, _package: object) -> object:
+        manifest = getattr(paths, "catalog_manifest")
+        raise OSError(f"catalog data failure in metadata.json at {manifest}")
+
+    monkeypatch.setattr(mobile_release_module, "_inspect_catalog", fail_catalog)
+
+    absolute = report_payload(verify_mobile_release_directory(candidate))
+    monkeypatch.chdir(candidate)
+    dot = report_payload(verify_mobile_release_directory(Path(".")))
+    monkeypatch.chdir(tmp_path)
+    relative = report_payload(verify_mobile_release_directory(Path(candidate_name)))
+    payloads = tuple(
+        json.dumps(payload, sort_keys=True).encode()
+        for payload in (absolute, dot, relative)
+    )
+
+    assert payloads[0] == payloads[1] == payloads[2]
+    decoded = payloads[0].decode()
+    assert "catalog data failure in metadata.json" in decoded
+    assert "<release-dir>/catalog/manifest.json" in decoded
+    assert str(candidate) not in decoded
+
+
 @pytest.mark.parametrize(
     "relative_path",
     (
