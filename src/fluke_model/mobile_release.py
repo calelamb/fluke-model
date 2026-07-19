@@ -173,9 +173,7 @@ def failed_mobile_release_report(
 ) -> MobileReleaseReport:
     """Build a deterministic all-failed report for a bounded external-input error."""
     stable_detail = (
-        normalize_external_detail(detail, Path(release_dir))
-        if release_dir is not None
-        else detail
+        normalize_external_detail(detail, Path(release_dir)) if release_dir is not None else detail
     )
     validations = tuple(failed(name, stable_detail) for name in _BOUNDARY_GATE_NAMES)
     return verify_mobile_release(
@@ -255,7 +253,15 @@ def _verify_mobile_release_directory(
     catalog = _inspect_catalog(paths, package)
     rights = _inspect_rights(paths, catalog)
     embeddings = inspect_embeddings(paths, package.digest, catalog.digest)
-    evaluations = inspect_evaluations(paths, package.digest, catalog.digest)
+    manifest = catalog.validated.manifest if catalog.validated is not None else None
+    evaluations = inspect_evaluations(
+        paths,
+        package.digest,
+        catalog.digest,
+        score_threshold=manifest.score_threshold if manifest is not None else None,
+        margin_threshold=manifest.margin_threshold if manifest is not None else None,
+        catalog_rows=catalog.validated.rows if catalog.validated is not None else None,
+    )
     evidence = _directory_evidence(
         path_validation,
         package,
@@ -400,7 +406,9 @@ def _boundary_gate(name: str, validations: tuple[ValidationEvidence, ...]) -> Ga
             "validation result is missing or duplicated",
         )
     evidence = matches[0]
-    return GateResult(name, evidence.passed, evidence.passed, "validation must pass", evidence.detail)
+    return GateResult(
+        name, evidence.passed, evidence.passed, "validation must pass", evidence.detail
+    )
 
 
 def _count_gate(name: str, value: object) -> GateResult:

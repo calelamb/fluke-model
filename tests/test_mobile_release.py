@@ -1,4 +1,5 @@
 """Release parity, open-set, provenance, and CLI gate contracts."""
+
 from __future__ import annotations
 
 import json
@@ -31,6 +32,13 @@ from fluke_model.mobile_release import (
     verify_mobile_release_directory as _verify_mobile_release_directory,
     write_mobile_release_report,
 )
+from fluke_model.mobile_release_evidence import (
+    DecisionRecord,
+    FixtureRow,
+    canonical_decisions_payload,
+    canonical_fixture_payload,
+    fixture_set_sha256,
+)
 from fluke_model.model_artifact import DINOV2_ARTIFACT_SHA256
 
 
@@ -58,15 +66,9 @@ def _valid_coreml_spec() -> object:
     output_type = SimpleNamespace(shape=[1, 384], dataType=65568)
     return SimpleNamespace(
         description=SimpleNamespace(
-            input=[
-                SimpleNamespace(
-                    name="pixels", type=SimpleNamespace(multiArrayType=input_type)
-                )
-            ],
+            input=[SimpleNamespace(name="pixels", type=SimpleNamespace(multiArrayType=input_type))],
             output=[
-                SimpleNamespace(
-                    name="embedding", type=SimpleNamespace(multiArrayType=output_type)
-                )
+                SimpleNamespace(name="embedding", type=SimpleNamespace(multiArrayType=output_type))
             ],
         )
     )
@@ -200,11 +202,11 @@ def _write_catalog_fixture(release_dir: Path, rights: Path, package_digest: str)
             manifest_version="synthetic-test",
             model_id=MODEL_ID,
             model_revision=MODEL_REVISION,
-            model_version="synthetic-test",
+            model_version="dinov2-small-coreml-v1",
             model_sha256=package_digest,
             preprocessing_version="dinov2-imagenet-v1",
             embedding_dimension=384,
-            index_version="synthetic-test",
+            index_version="mobile-reference-v1",
             minimum_app_build=1,
             maximum_app_build=100,
             score_semantics="uncalibrated_similarity_not_probability",
@@ -216,15 +218,33 @@ def _write_catalog_fixture(release_dir: Path, rights: Path, package_digest: str)
     return sha256_file(catalog / "manifest.json")
 
 
-def _write_evaluation_fixture(
-    release_dir: Path, package_digest: str, catalog_digest: str
-) -> None:
+def _write_evaluation_fixture(release_dir: Path, package_digest: str, catalog_digest: str) -> None:
     pytorch = np.zeros((2, 384), dtype=np.float32)
     pytorch[0, 0] = 1.0
     pytorch[1, 1] = 1.0
     coreml = pytorch.copy()
     evaluation = release_dir / "evaluation"
     evaluation.mkdir()
+    _write_json(
+        evaluation / "evaluation-plan.json",
+        {
+            "schemaVersion": 1,
+            "evidencePurpose": "production",
+            "approvedBy": "Synthetic verifier contract fixture",
+            "approvedAt": "2026-07-19T00:00:00+00:00",
+            "provenanceUrl": "https://example.invalid/orcawatch/production-evaluation",
+            "cohortDefinitions": {
+                name: "Synthetic verifier contract only"
+                for name in ("parity", "closedSetRetrieval", *OPEN_COHORTS)
+            },
+        },
+    )
+    fixture_rows, decisions = _raw_evaluation_fixture()
+    fixture_digest = fixture_set_sha256(fixture_rows)
+    (evaluation / "fixture-manifest.json").write_bytes(canonical_fixture_payload(fixture_rows))
+    (evaluation / "decisions.json").write_bytes(
+        canonical_decisions_payload(decisions, score_threshold=0.7, margin_threshold=0.1)
+    )
     np.save(evaluation / "parity-pytorch.npy", pytorch, allow_pickle=False)
     np.save(evaluation / "parity-coreml.npy", coreml, allow_pickle=False)
     _write_json(
@@ -233,16 +253,14 @@ def _write_evaluation_fixture(
             "schemaVersion": 1,
             "evaluationType": "pytorchCoreMLParity",
             "evidencePurpose": "production",
-            "provenanceUrl": "https://example.invalid/orcawatch/production-parity",
+            "provenanceUrl": "https://example.invalid/orcawatch/production-evaluation",
             "modelPackageSha256": package_digest,
             "catalogManifestSha256": catalog_digest,
             "sourceModelSha256": DINOV2_ARTIFACT_SHA256["model.safetensors"],
             "preprocessingVersion": "dinov2-imagenet-v1",
-            "fixtureSetSha256": FIXTURE_SET_SHA256,
+            "fixtureSetSha256": fixture_digest,
             "sampleCount": 2,
-            "pytorchEmbeddingsSha256": sha256_file(
-                evaluation / "parity-pytorch.npy"
-            ),
+            "pytorchEmbeddingsSha256": sha256_file(evaluation / "parity-pytorch.npy"),
             "coremlEmbeddingsSha256": sha256_file(evaluation / "parity-coreml.npy"),
         },
     )
@@ -252,6 +270,7 @@ def _write_evaluation_fixture(
             evaluation_type="closedSetRetrieval",
             package_digest=package_digest,
             catalog_digest=catalog_digest,
+            sample_count=100,
         ),
     )
     for cohort in OPEN_COHORTS:
@@ -268,8 +287,96 @@ def _write_evaluation_fixture(
                 evaluation_type=cohort,
                 package_digest=package_digest,
                 catalog_digest=catalog_digest,
+                sample_count=100,
             ),
         )
+
+    for report_path in (
+        evaluation / "closed-set.json",
+        *(
+            evaluation / name
+            for name in (
+                "open-set.json",
+                "non-orca.json",
+                "poor-quality.json",
+                "occlusion.json",
+                "distribution-shift.json",
+            )
+        ),
+    ):
+        payload = json.loads(report_path.read_text(encoding="utf-8"))
+        _write_json(report_path, {**payload, "fixtureSetSha256": fixture_digest})
+
+
+def _raw_evaluation_fixture() -> tuple[tuple[FixtureRow, ...], tuple[DecisionRecord, ...]]:
+    rows: list[FixtureRow] = [
+        FixtureRow(
+            fixture_id="synthetic-reference-1",
+            relative_path="images/synthetic-reference-1.jpg",
+            image_sha256="d" * 64,
+            roles=("reference",),
+            reference_photo_id="synthetic-ref-1",
+            whale_id="synthetic-whale-1",
+            catalog_id="SYNTHETIC-1",
+            source_id="synthetic-owned-fixture",
+            path=Path("images/synthetic-reference-1.jpg"),
+        )
+    ]
+    decisions: list[DecisionRecord] = []
+    for index in range(2):
+        rows.append(_fixture_row(f"parity-{index}", "parity", whale_id=None))
+    for index in range(100):
+        fixture_id = f"closed-{index:03d}"
+        truth = f"truth-{index:03d}"
+        if index < 70:
+            ranking = (truth, "other-1", "other-2")
+        elif index < 84:
+            ranking = ("other-1", truth, "other-2")
+        else:
+            ranking = ("other-1", "other-2", "other-3")
+        rows.append(_fixture_row(fixture_id, "closedSetRetrieval", whale_id=truth))
+        decisions.append(
+            DecisionRecord(fixture_id, "closedSetRetrieval", truth, ranking, 0.8, 0.6, True)
+        )
+    filenames = {
+        "openSet": "open",
+        "nonOrca": "non-orca",
+        "poorQuality": "poor-quality",
+        "occlusion": "occlusion",
+        "distributionShift": "distribution-shift",
+    }
+    for cohort, prefix in filenames.items():
+        for index in range(100):
+            fixture_id = f"{prefix}-{index:03d}"
+            accepted = index < 4
+            top_score, second_score = (0.8, 0.6) if accepted else (0.55, 0.5)
+            rows.append(_fixture_row(fixture_id, cohort, whale_id=None))
+            decisions.append(
+                DecisionRecord(
+                    fixture_id,
+                    cohort,
+                    None,
+                    ("whale-1", "whale-2"),
+                    top_score,
+                    second_score,
+                    accepted,
+                )
+            )
+    return tuple(rows), tuple(decisions)
+
+
+def _fixture_row(fixture_id: str, role: str, *, whale_id: str | None) -> FixtureRow:
+    return FixtureRow(
+        fixture_id=fixture_id,
+        relative_path=f"images/{fixture_id}.jpg",
+        image_sha256="d" * 64,
+        roles=(role,),
+        reference_photo_id=None,
+        whale_id=whale_id,
+        catalog_id=None,
+        source_id=None,
+        path=Path(f"images/{fixture_id}.jpg"),
+    )
 
 
 def test_release_requires_every_approved_gate() -> None:
@@ -395,9 +502,7 @@ def test_directory_verifier_accepts_complete_digest_bound_fixture(tmp_path: Path
     assert report.model_package_sha256 == package_tree_sha256(
         release_dir / "FlukeEmbedder.mlpackage"
     )
-    assert report.catalog_manifest_sha256 == sha256_file(
-        release_dir / "catalog" / "manifest.json"
-    )
+    assert report.catalog_manifest_sha256 == sha256_file(release_dir / "catalog" / "manifest.json")
 
 
 def test_directory_verifier_rejects_symlinked_release_root(tmp_path: Path) -> None:
@@ -438,8 +543,7 @@ def test_passing_report_is_identical_for_absolute_dot_and_relative_roots(
     monkeypatch.chdir(tmp_path)
     relative = report_payload(verify_mobile_release_directory(Path(release_dir.name)))
     payloads = tuple(
-        json.dumps(payload, sort_keys=True).encode()
-        for payload in (absolute, dot, relative)
+        json.dumps(payload, sort_keys=True).encode() for payload in (absolute, dot, relative)
     )
 
     assert payloads[0] == payloads[1] == payloads[2]
@@ -612,8 +716,7 @@ def test_failed_report_normalization_canonicalizes_relative_release_roots(
     monkeypatch.chdir(tmp_path)
     relative = report_payload(verify_mobile_release_directory(Path(candidate_name)))
     payloads = tuple(
-        json.dumps(payload, sort_keys=True).encode()
-        for payload in (absolute, dot, relative)
+        json.dumps(payload, sort_keys=True).encode() for payload in (absolute, dot, relative)
     )
 
     assert payloads[0] == payloads[1] == payloads[2]

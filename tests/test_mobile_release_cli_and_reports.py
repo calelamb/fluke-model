@@ -20,14 +20,69 @@ def test_directory_verifier_uses_worst_open_set_cohort(tmp_path: Path) -> None:
     release_dir = build_release_fixture(tmp_path)
     path = release_dir / "evaluation" / "poor-quality.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["falseAcceptRate"] = 0.051
+    payload["falseAcceptRate"] = 0.06
     _update_json(path, **payload)
+    decisions_path = release_dir / "evaluation" / "decisions.json"
+    decisions = json.loads(decisions_path.read_text(encoding="utf-8"))
+    for record in decisions["records"]:
+        if record["fixtureId"] in {"poor-quality-004", "poor-quality-005"}:
+            record.update({"accepted": True, "topScore": 0.8, "secondScore": 0.6})
+    decisions_path.write_text(
+        json.dumps(decisions, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
     report = verify_mobile_release_directory(release_dir)
 
     assert report.ready is False
     gate = next(g for g in report.gates if g.name == "false_accept")
-    assert gate.observed == pytest.approx(0.051)
+    assert gate.observed == pytest.approx(0.06)
+
+
+def test_directory_verifier_rejects_report_metric_not_supported_by_raw_decisions(
+    tmp_path: Path,
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    _update_json(release_dir / "evaluation" / "closed-set.json", top1=0.99)
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    detail = next(g.detail for g in report.gates if g.name == "required_reports")
+    assert "do not match raw decisions" in detail
+
+
+def test_directory_verifier_rejects_fixture_manifest_tampering(tmp_path: Path) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    path = release_dir / "evaluation" / "fixture-manifest.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["rows"][0]["imageSha256"] = "e" * 64
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert "fixtureSetSha256" in next(
+        g.detail for g in report.gates if g.name == "required_reports"
+    )
+
+
+def test_directory_verifier_binds_reports_to_approved_evaluation_plan(tmp_path: Path) -> None:
+    release_dir = build_release_fixture(tmp_path)
+    _update_json(
+        release_dir / "evaluation" / "evaluation-plan.json",
+        provenanceUrl="https://example.invalid/different-approved-plan",
+    )
+
+    report = verify_mobile_release_directory(release_dir)
+
+    assert report.ready is False
+    assert "approved evaluation plan" in next(
+        g.detail for g in report.gates if g.name == "required_reports"
+    )
 
 
 def test_directory_verifier_requires_exact_report_schema_and_provenance(tmp_path: Path) -> None:

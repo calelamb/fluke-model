@@ -79,6 +79,20 @@ with stable photo/catalog IDs on an exact HTTPS object-storage host, and submit 
 attestation through `/rebuild-index`. Until then `/ready` must remain `503`, and the API/iOS app must
 keep identification disabled.
 
+When those external inputs exist, `scripts/build_mobile_release.py` is the single fail-closed
+construction boundary. It consumes the approved corpus manifest, corpus root, evaluation plan,
+production rights attestation, pinned local PyTorch artifact, audited Core ML package/metadata,
+explicit app-build range, and launch-approved score/margin thresholds. It validates actual image
+bytes, executes both real runtimes, builds the deterministic catalog, emits canonical fixture and
+raw-decision evidence, and publishes only after `verify_mobile_release.py` independently recomputes
+the metrics and accepts every gate. It does not download a corpus, infer permissions, tune a
+threshold, or substitute synthetic output when Core ML cannot execute.
+
+`scripts/export_verified_mobile_catalog.py` is the later iOS handoff boundary. It reverifies the
+release, enforces the 50,000-reference limit, exact `dinov2-small-coreml-v1` and mobile index
+versions, and the requested app build's compatibility range, then atomically exports only
+`manifest.json`, `metadata.json`, and `references.f16`. It does not modify the iOS repository.
+
 The container can be deployed on a later free allowance if a provider offers sufficient CPU, memory,
 image size, and persistent storage, but this verification neither selected a paid service nor claimed
 that a zero-cost host can satisfy those resource requirements.
