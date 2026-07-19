@@ -21,12 +21,13 @@ from fluke_model.rights import EXPECTED_MODEL_LICENSE_SPDX, ModelRights, RightsE
 
 _SCHEMA_VERSION = 1
 _VECTOR_DTYPE = "float16"
-SCORE_SEMANTICS = "cosineSimilarity"
+SCORE_SEMANTICS = "uncalibrated_similarity_not_probability"
 _HASH_CHUNK_BYTES = 1024 * 1024
 _MAX_RIGHTS_BYTES = 1024 * 1024
 _SHA256_LENGTH = 64
 _RIGHTS_KEYS = {
     "schema_version",
+    "purpose",
     "approved_by",
     "approved_at",
     "commercial_use_allowed",
@@ -60,6 +61,8 @@ _MANIFEST_KEYS = {
     "embeddingDimension",
     "dtype",
     "indexVersion",
+    "minimumAppBuild",
+    "maximumAppBuild",
     "referenceCount",
     "catalogCount",
     "vectorsSha256",
@@ -93,6 +96,8 @@ class MobileCatalogRelease:
     preprocessing_version: str
     embedding_dimension: int
     index_version: str
+    minimum_app_build: int
+    maximum_app_build: int
     score_semantics: str
     score_threshold: float
     margin_threshold: float
@@ -113,6 +118,8 @@ class MobileCatalogManifest:
     embedding_dimension: int
     dtype: str
     index_version: str
+    minimum_app_build: int
+    maximum_app_build: int
     reference_count: int
     catalog_count: int
     vectors_sha256: str
@@ -152,6 +159,7 @@ class MobileRightsAttestation:
     """Rights evidence for the exact model and every bundled reference source."""
 
     schema_version: int
+    purpose: str
     approved_by: str
     approved_at: datetime
     commercial_use_allowed: bool
@@ -164,9 +172,12 @@ class MobileRightsAttestation:
         model_id: str,
         model_revision: str,
         reference_source_ids: tuple[str, ...],
+        required_purpose: str | None = None,
     ) -> None:
         """Require exact model/source coverage and all production bundle permissions."""
         _validate_attestation_header(self, model_id=model_id, model_revision=model_revision)
+        if required_purpose is not None and self.purpose != required_purpose:
+            raise RightsError(f"rights attestation purpose must be {required_purpose}")
         sources = _unique_rights_sources(self.data_sources)
         expected = frozenset(reference_source_ids)
         actual = frozenset(source.source_id for source in sources)
@@ -193,6 +204,8 @@ def manifest_payload(value: MobileCatalogManifest) -> dict[str, object]:
         "embeddingDimension": value.embedding_dimension,
         "dtype": value.dtype,
         "indexVersion": value.index_version,
+        "minimumAppBuild": value.minimum_app_build,
+        "maximumAppBuild": value.maximum_app_build,
         "referenceCount": value.reference_count,
         "catalogCount": value.catalog_count,
         "vectorsSha256": value.vectors_sha256,
@@ -295,6 +308,7 @@ def _validate_release(release: MobileCatalogRelease) -> None:
         raise ValueError("embedding dimension must be a positive integer")
     if release.embedding_dimension <= 0:
         raise ValueError("embedding dimension must be a positive integer")
+    _validate_app_build_range(release.minimum_app_build, release.maximum_app_build)
     _validate_sha256("model SHA256", release.model_sha256)
     _validate_threshold("score threshold", release.score_threshold)
     _validate_threshold("margin threshold", release.margin_threshold)
@@ -381,6 +395,7 @@ def _rights_from_payload(payload: Mapping[str, Any]) -> MobileRightsAttestation:
         raise RightsError("rights approval date must be valid ISO-8601") from error
     return MobileRightsAttestation(
         schema_version=_require_integer(payload, "schema_version"),
+        purpose=_rights_purpose(payload["purpose"]),
         approved_by=_require_string(payload, "approved_by"),
         approved_at=approved_at,
         commercial_use_allowed=_require_boolean(payload, "commercial_use_allowed"),
@@ -390,6 +405,12 @@ def _rights_from_payload(payload: Mapping[str, Any]) -> MobileRightsAttestation:
             for value in source_payloads
         ),
     )
+
+
+def _rights_purpose(value: object) -> str:
+    if not isinstance(value, str) or value not in {"test", "production"}:
+        raise RightsError("rights attestation purpose must be test or production")
+    return value
 
 
 def _model_rights_from_payload(payload: Mapping[str, Any]) -> ModelRights:
@@ -520,6 +541,8 @@ def _build_manifest(
         embedding_dimension=release.embedding_dimension,
         dtype=_VECTOR_DTYPE,
         index_version=release.index_version,
+        minimum_app_build=release.minimum_app_build,
+        maximum_app_build=release.maximum_app_build,
         reference_count=len(rows),
         catalog_count=len({row.catalog_id for row in rows}),
         vectors_sha256=sha256_file(staging / "references.f16"),
@@ -616,6 +639,15 @@ def _validate_threshold(name: str, value: float) -> None:
         raise ValueError(f"{name} must be finite and within [-1, 1]")
     if not math.isfinite(float(value)) or not -1.0 <= float(value) <= 1.0:
         raise ValueError(f"{name} must be finite and within [-1, 1]")
+
+
+def _validate_app_build_range(minimum: object, maximum: object) -> None:
+    values = (("minimumAppBuild", minimum), ("maximumAppBuild", maximum))
+    for name, value in values:
+        if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+            raise ValueError(f"{name} must be a positive integer")
+    if minimum > maximum:
+        raise ValueError("minimumAppBuild must be less than or equal to maximumAppBuild")
 
 
 def _is_https_url(value: str) -> bool:

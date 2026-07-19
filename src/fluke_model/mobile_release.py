@@ -6,10 +6,11 @@ import json
 import math
 import os
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any
 
 from fluke_model.embedders import DINO_V2_MODEL_ID, DINO_V2_REVISION
 from fluke_model.mobile_catalog import (
@@ -147,7 +148,11 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
     )
 
 
-def verify_mobile_release_directory(release_dir: Path) -> MobileReleaseReport:
+def verify_mobile_release_directory(
+    release_dir: Path,
+    *,
+    package_loader: Callable[[Path], Any] | None = None,
+) -> MobileReleaseReport:
     """Inspect the fixed release layout and always return a fail-closed report."""
     raw_root = Path(release_dir)
     try:
@@ -156,7 +161,7 @@ def verify_mobile_release_directory(release_dir: Path) -> MobileReleaseReport:
         return failed_mobile_release_report(str(error))
     root = raw_root.resolve(strict=False)
     try:
-        report = _verify_mobile_release_directory(root)
+        report = _verify_mobile_release_directory(root, package_loader=package_loader)
     except _EXPECTED_INPUT_ERRORS as error:
         detail = normalize_external_detail(f"release input validation failed: {error}", root)
         report = failed_mobile_release_report(detail)
@@ -239,13 +244,17 @@ def write_mobile_release_report(path: Path, report: MobileReleaseReport) -> None
         temporary.unlink(missing_ok=True)
 
 
-def _verify_mobile_release_directory(release_dir: Path) -> MobileReleaseReport:
+def _verify_mobile_release_directory(
+    release_dir: Path,
+    *,
+    package_loader: Callable[[Path], Any] | None,
+) -> MobileReleaseReport:
     paths = release_paths(release_dir)
     path_validation = validate_input_layout(paths)
-    package = inspect_package(paths)
+    package = inspect_package(paths, package_loader=package_loader)
     catalog = _inspect_catalog(paths, package)
     rights = _inspect_rights(paths, catalog)
-    embeddings = inspect_embeddings(paths)
+    embeddings = inspect_embeddings(paths, package.digest, catalog.digest)
     evaluations = inspect_evaluations(paths, package.digest, catalog.digest)
     evidence = _directory_evidence(
         path_validation,
@@ -356,6 +365,7 @@ def _inspect_rights(paths: ReleasePaths, catalog: _CatalogEvidence) -> Validatio
             model_id=manifest.model_id,
             model_revision=manifest.model_revision,
             reference_source_ids=source_ids,
+            required_purpose="production",
         )
     except (RightsError, *_EXPECTED_INPUT_ERRORS) as error:
         return failed("rights", str(error))

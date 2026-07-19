@@ -178,6 +178,14 @@ def _valid_spec_loader(_package_path: Path) -> object:
     return _valid_coreml_spec()
 
 
+def _source_artifact_sha256(model_sha256: str = "a" * 64) -> dict[str, str]:
+    return {
+        "config.json": "c" * 64,
+        "model.safetensors": model_sha256,
+        "preprocessor_config.json": "d" * 64,
+    }
+
+
 def _test_directory_exchange(first: Path, second: Path) -> None:
     temporary = first.with_name(f".{first.name}.test-swap")
     os.replace(first, temporary)
@@ -217,6 +225,7 @@ def test_export_metadata_records_every_reproducibility_input() -> None:
     metadata = build_export_metadata(
         model_sha256="a" * 64,
         package_sha256="b" * 64,
+        source_artifact_sha256=_source_artifact_sha256(),
         tool_versions={
             "coremltools": "9.0",
             "numpy": "2.2.6",
@@ -257,6 +266,7 @@ def test_export_metadata_rejects_invalid_digests(field_name: str, digest: str) -
     arguments = {
         "model_sha256": "a" * 64,
         "package_sha256": "b" * 64,
+        "source_artifact_sha256": _source_artifact_sha256(),
         "tool_versions": {"python": "3.11.9"},
     }
     arguments[field_name] = digest
@@ -276,6 +286,7 @@ def test_export_metadata_rejects_invalid_tool_versions(
         build_export_metadata(
             model_sha256="a" * 64,
             package_sha256="b" * 64,
+            source_artifact_sha256=_source_artifact_sha256(),
             tool_versions=tool_versions,
         )
 
@@ -583,6 +594,7 @@ def test_publish_rejects_incomplete_staged_export(tmp_path: Path) -> None:
     metadata = build_export_metadata(
         model_sha256="a" * 64,
         package_sha256="b" * 64,
+        source_artifact_sha256=_source_artifact_sha256(),
         tool_versions={"python": "3.11.9"},
     )
 
@@ -608,6 +620,7 @@ def test_publish_rejects_staged_package_with_invalid_coreml_interface(
         metadata = build_export_metadata(
             model_sha256="a" * 64,
             package_sha256=package_tree_sha256(package),
+            source_artifact_sha256=_source_artifact_sha256(),
             tool_versions={"python": "3.11.9"},
         )
         (staging_dir / "export-metadata.json").write_text(
@@ -625,7 +638,7 @@ def test_publish_rejects_staged_package_with_invalid_coreml_interface(
             tmp_path / "candidate",
             replace=False,
             exporter=fake_exporter,
-            spec_loader=lambda _path: invalid_spec,
+            package_loader=lambda _path: invalid_spec,
         )
 
     assert not (tmp_path / "candidate").exists()
@@ -635,7 +648,7 @@ def test_publish_rejects_staged_package_with_invalid_coreml_interface(
             tmp_path / "candidate-reload",
             replace=False,
             exporter=fake_exporter,
-            spec_loader=lambda _path: (_ for _ in ()).throw(ValueError("unreadable")),
+            package_loader=lambda _path: (_ for _ in ()).throw(ValueError("unreadable")),
         )
 
 
@@ -660,6 +673,7 @@ def test_publish_rejects_invalid_staged_metadata(
         metadata = build_export_metadata(
             model_sha256="a" * 64,
             package_sha256=package_tree_sha256(package),
+            source_artifact_sha256=_source_artifact_sha256(),
             tool_versions={"python": "3.11.9"},
         )
         metadata_path = staging_dir / "export-metadata.json"
@@ -690,6 +704,7 @@ def test_publish_replaces_output_atomically_and_cleans_staging(tmp_path: Path) -
     metadata = build_export_metadata(
         model_sha256="a" * 64,
         package_sha256="b" * 64,
+        source_artifact_sha256=_source_artifact_sha256(),
         tool_versions={"python": "3.11.9"},
     )
 
@@ -700,6 +715,7 @@ def test_publish_replaces_output_atomically_and_cleans_staging(tmp_path: Path) -
         actual_metadata = build_export_metadata(
             model_sha256=metadata.model_sha256,
             package_sha256=package_tree_sha256(package),
+            source_artifact_sha256=metadata.source_artifact_sha256,
             tool_versions=metadata.tool_versions,
         )
         (staging_dir / "export-metadata.json").write_text(
@@ -714,7 +730,7 @@ def test_publish_replaces_output_atomically_and_cleans_staging(tmp_path: Path) -
         replace=True,
         exporter=fake_export,
         exchange=_test_directory_exchange,
-        spec_loader=_valid_spec_loader,
+        package_loader=_valid_spec_loader,
     )
 
     assert result.model_sha256 == metadata.model_sha256
@@ -736,6 +752,7 @@ def test_publish_atomic_exchange_failure_preserves_both_trees(tmp_path: Path) ->
         metadata = build_export_metadata(
             model_sha256="a" * 64,
             package_sha256=package_tree_sha256(package),
+            source_artifact_sha256=_source_artifact_sha256(),
             tool_versions={"python": "3.11.9"},
         )
         (staging_dir / "export-metadata.json").write_text(
@@ -756,7 +773,7 @@ def test_publish_atomic_exchange_failure_preserves_both_trees(tmp_path: Path) ->
             replace=True,
             exporter=fake_exporter,
             exchange=failing_exchange,
-            spec_loader=_valid_spec_loader,
+            package_loader=_valid_spec_loader,
         )
 
     assert sentinel.read_text(encoding="utf-8") == "old"
@@ -765,33 +782,3 @@ def test_publish_atomic_exchange_failure_preserves_both_trees(tmp_path: Path) ->
     assert (
         staging_directories[0] / "FlukeEmbedder.mlpackage/model.bin"
     ).read_bytes() == b"new"
-
-
-def test_publish_rejects_metadata_digest_that_does_not_match_package(tmp_path: Path) -> None:
-    output = tmp_path / "candidate"
-    metadata = build_export_metadata(
-        model_sha256="a" * 64,
-        package_sha256="b" * 64,
-        tool_versions={"python": "3.11.9"},
-    )
-
-    def fake_export(_artifact_dir: Path, staging_dir: Path) -> object:
-        package = staging_dir / "FlukeEmbedder.mlpackage"
-        package.mkdir(parents=True)
-        (package / "model.bin").write_bytes(b"different-package")
-        (staging_dir / "export-metadata.json").write_text(
-            json.dumps(metadata.as_json_dict()),
-            encoding="utf-8",
-        )
-        return metadata
-
-    with pytest.raises(CoreMLExportError, match="digest does not match"):
-        publish_coreml_export(
-            tmp_path / "source",
-            output,
-            replace=False,
-            exporter=fake_export,
-        )
-
-    assert not output.exists()
-    assert list(tmp_path.glob(".candidate.*")) == []

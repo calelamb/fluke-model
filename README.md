@@ -69,6 +69,19 @@ The command writes `mobile-release-report.json` in the candidate directory and e
 every package, catalog, digest, rights, parity, closed-set, open-set, cohort-presence, finiteness, and
 sample-count gate passes. Synthetic test fixtures are never production release evidence.
 
+Production evidence is explicit: rights attestations use `purpose: production`, while the committed
+fixture uses `purpose: test` and cannot satisfy the production verifier. Evaluation reports and
+`evaluation/parity.json` use `evidencePurpose: production`, an absolute HTTPS `provenanceUrl`, and a
+digest-bound `fixtureSetSha256`. The parity report also binds the package, catalog manifest, pinned
+source model, preprocessing version, sample count, and both `.npy` SHA256 values. The verifier
+reloads an isolated Core ML package and requires the exact Float32 `pixels (1,3,224,224)` to
+`embedding (1,384)` interface; synthetic package bytes fail by default.
+
+Catalog manifests expose `minimumAppBuild` and `maximumAppBuild` as an ordered positive-integer
+compatibility range. The client-facing score literal is
+`uncalibrated_similarity_not_probability`; cosine is only the internal ranking operation and must
+never be surfaced as a probability.
+
 The container downloads the exact revision during its image build, verifies every required file
 against a committed SHA256 allowlist, and runs Transformers in offline/local-only mode. CI builds a
 rights-attested project-generated fixture index, requires container readiness `200`, and exercises a

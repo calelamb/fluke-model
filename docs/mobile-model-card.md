@@ -17,8 +17,10 @@ or any missed threshold produce `ready: false` and a nonzero exit.
 The model is the exact pinned `facebook/dinov2-small` revision
 `ed25f3a31f01632728cabb09d1542f84ab7b0056`, exported as a fixed-shape iOS 17 Core ML ML Program.
 It accepts one preprocessed RGB image tensor with shape `(1, 3, 224, 224)` and returns one
-384-dimensional L2-normalized embedding. The mobile catalog uses cosine similarity to rank
-candidate matches for human review.
+384-dimensional L2-normalized embedding. The package is reloaded in an isolated directory and must
+expose exact Float32 `pixels (1,3,224,224)` and `embedding (1,384)` features. The mobile catalog uses
+cosine similarity internally to rank candidate matches for human review, while the API/catalog
+handoff emits `uncalibrated_similarity_not_probability`.
 
 Intended use is decision support for authorized OrcaWatch users comparing a suitable orca dorsal
 fin photograph with a rights-cleared, redistributed reference catalog. The output may help a human
@@ -43,6 +45,8 @@ the exact pinned model revision and exactly the reference source IDs in `catalog
 Every source must explicitly allow commercial production use, redistribution in the mobile bundle,
 and mobile ML use, with absolute HTTPS evidence and a named, timezone-aware approval. The verifier
 checks that the attestation bytes match the catalog's recorded SHA256.
+The attestation has an exact `purpose` field: `purpose: production` is mandatory for a release;
+the committed synthetic fixture is `purpose: test` and intentionally fails that production gate.
 
 The production evaluation owner must separately document the provenance, permission basis,
 collection protocol, split policy, exclusions, and cohort definitions for all evaluation images.
@@ -88,6 +92,7 @@ catalog/
 evaluation/
   parity-pytorch.npy
   parity-coreml.npy
+  parity.json
   closed-set.json
   open-set.json
   non-orca.json
@@ -116,26 +121,42 @@ release root, preventing verifier output from creating an extra entry that would
 next exact-layout check.
 
 The two parity files are exact two-dimensional Float32 NumPy arrays with equal positive `(N, 384)`
-shape, finite values, and unit-normalized rows. Parity is the minimum per-row cosine similarity.
+shape, finite values, and unit-normalized rows. Before allocation, the verifier bounds file bytes,
+parses and validates the `.npy` header, and enforces a maximum sample-row count. Parity is the
+minimum per-row cosine similarity. `evaluation/parity.json` has this exact schema:
+
+```text
+schemaVersion, evaluationType, evidencePurpose, provenanceUrl,
+modelPackageSha256, catalogManifestSha256, sourceModelSha256,
+preprocessingVersion, fixtureSetSha256, sampleCount,
+pytorchEmbeddingsSha256, coremlEmbeddingsSha256
+```
 
 `closed-set.json` has exactly these keys:
 
 ```text
-schemaVersion, evaluationType, modelPackageSha256, catalogManifestSha256,
-sampleCount, top1, top3
+schemaVersion, evaluationType, evidencePurpose, provenanceUrl, fixtureSetSha256,
+modelPackageSha256, catalogManifestSha256, sampleCount, top1, top3
 ```
 
 Each of the five open-set JSON files has exactly these keys:
 
 ```text
-schemaVersion, evaluationType, modelPackageSha256, catalogManifestSha256,
-sampleCount, falseAcceptRate
+schemaVersion, evaluationType, evidencePurpose, provenanceUrl, fixtureSetSha256,
+modelPackageSha256, catalogManifestSha256, sampleCount, falseAcceptRate
 ```
 
 `schemaVersion` is `1`. `evaluationType` must match the fixed filename: `closedSetRetrieval`,
 `openSet`, `nonOrca`, `poorQuality`, `occlusion`, or `distributionShift`. Every report must name the
 actual Core ML package-tree SHA256 and the exact `catalog/manifest.json` file SHA256. Missing or
 extra fields fail the release.
+
+Every evaluation JSON uses `evidencePurpose: production`, an absolute HTTPS `provenanceUrl`, and a
+lowercase SHA256 `fixtureSetSha256`. Catalog manifests also carry positive integer
+`minimumAppBuild` and `maximumAppBuild` values with `minimumAppBuild <= maximumAppBuild`; clients
+must reject catalogs outside that range. Export metadata binds all three pinned source artifacts
+(`config.json`, `model.safetensors`, and `preprocessor_config.json`) and records Core ML Tools,
+NumPy, Pillow, Python, PyTorch, Transformers, macOS, and Xcode versions.
 
 ## Known limitations
 

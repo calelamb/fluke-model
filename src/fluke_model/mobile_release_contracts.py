@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import math
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
+from urllib.parse import urlsplit
 
 import numpy as np
 
@@ -18,11 +19,13 @@ from fluke_model.coreml_artifact import (
     MINIMUM_DEPLOYMENT_TARGET,
     CoreMLExportError,
     package_tree_sha256,
+    validate_coreml_package_interface,
 )
 from fluke_model.embedders import DINO_V2_MODEL_ID, DINO_V2_REVISION
 from fluke_model.mobile_catalog import sha256_file
 from fluke_model.mobile_export import mobile_model_contract
 from fluke_model.model_artifact import DINOV2_ARTIFACT_SHA256
+from fluke_model.numpy_artifact import load_bounded_parity_array
 
 REPORT_FILENAME = "mobile-release-report.json"
 EMBEDDING_DIMENSION = 384
@@ -47,6 +50,7 @@ _EVALUATION_ENTRIES = frozenset(
     {
         "parity-pytorch.npy",
         "parity-coreml.npy",
+        "parity.json",
         "closed-set.json",
         *(filename for _, filename in OPEN_REPORTS),
     }
@@ -58,6 +62,7 @@ _EXPORT_METADATA_KEYS = {
     "model_id",
     "model_revision",
     "model_sha256",
+    "source_artifact_sha256",
     "output_shape",
     "package_sha256",
     "preprocessing_version",
@@ -66,15 +71,21 @@ _EXPORT_METADATA_KEYS = {
 _TOOL_VERSIONS = MappingProxyType(
     {
         "coremltools": "9.0",
+        "macos": "26.5.1",
         "numpy": "2.2.6",
+        "pillow": "12.3.0",
         "python": "3.11.15",
         "torch": "2.13.0",
         "transformers": "5.14.0",
+        "xcode": "26.0.1 (17A400)",
     }
 )
 _CLOSED_REPORT_KEYS = {
     "schemaVersion",
     "evaluationType",
+    "evidencePurpose",
+    "provenanceUrl",
+    "fixtureSetSha256",
     "modelPackageSha256",
     "catalogManifestSha256",
     "sampleCount",
@@ -84,10 +95,27 @@ _CLOSED_REPORT_KEYS = {
 _OPEN_REPORT_KEYS = {
     "schemaVersion",
     "evaluationType",
+    "evidencePurpose",
+    "provenanceUrl",
+    "fixtureSetSha256",
     "modelPackageSha256",
     "catalogManifestSha256",
     "sampleCount",
     "falseAcceptRate",
+}
+_PARITY_REPORT_KEYS = {
+    "schemaVersion",
+    "evaluationType",
+    "evidencePurpose",
+    "provenanceUrl",
+    "modelPackageSha256",
+    "catalogManifestSha256",
+    "sourceModelSha256",
+    "preprocessingVersion",
+    "fixtureSetSha256",
+    "sampleCount",
+    "pytorchEmbeddingsSha256",
+    "coremlEmbeddingsSha256",
 }
 _SHA256_LENGTH = 64
 
@@ -116,6 +144,7 @@ class ReleasePaths:
     evaluation_dir: Path
     pytorch_embeddings: Path
     coreml_embeddings: Path
+    parity_report: Path
     closed_report: Path
     open_reports: tuple[tuple[str, Path], ...]
 
@@ -128,6 +157,7 @@ class ReleasePaths:
             ("rights-attestation.json", self.rights),
             ("evaluation/parity-pytorch.npy", self.pytorch_embeddings),
             ("evaluation/parity-coreml.npy", self.coreml_embeddings),
+            ("evaluation/parity.json", self.parity_report),
             ("evaluation/closed-set.json", self.closed_report),
             *(
                 (f"evaluation/{path.name}", path)
@@ -177,6 +207,7 @@ def release_paths(root: Path) -> ReleasePaths:
         evaluation_dir=evaluation,
         pytorch_embeddings=evaluation / "parity-pytorch.npy",
         coreml_embeddings=evaluation / "parity-coreml.npy",
+        parity_report=evaluation / "parity.json",
         closed_report=evaluation / "closed-set.json",
         open_reports=tuple((kind, evaluation / filename) for kind, filename in OPEN_REPORTS),
     )
@@ -205,7 +236,11 @@ def validate_input_layout(paths: ReleasePaths) -> ValidationEvidence:
     )
 
 
-def inspect_package(paths: ReleasePaths) -> PackageEvidence:
+def inspect_package(
+    paths: ReleasePaths,
+    *,
+    package_loader: Callable[[Path], Any] | None = None,
+) -> PackageEvidence:
     """Hash the actual package and independently validate exact export metadata."""
     digest = safe_package_digest(paths.package)
     try:
@@ -213,15 +248,23 @@ def inspect_package(paths: ReleasePaths) -> PackageEvidence:
         _validate_export_metadata(metadata)
         if digest is None or digest != metadata["package_sha256"]:
             raise ValueError("Core ML package digest does not match export metadata")
+        validate_coreml_package_interface(paths.package, package_loader=package_loader)
     except (CoreMLExportError, OSError, OverflowError, UnicodeError, ValueError, TypeError) as error:
         return PackageEvidence(digest, failed("package", str(error)))
     return PackageEvidence(
         digest,
-        passed("package", "exact export schema, identity, package tree, and audited tools verified"),
+        passed(
+            "package",
+            "exact export schema, identity, package tree, interface, and audited tools verified",
+        ),
     )
 
 
-def inspect_embeddings(paths: ReleasePaths) -> EmbeddingEvidence:
+def inspect_embeddings(
+    paths: ReleasePaths,
+    package_digest: str | None = None,
+    catalog_digest: str | None = None,
+) -> EmbeddingEvidence:
     """Load bounded NumPy inputs and calculate minimum paired cosine parity."""
     try:
         pytorch = _load_embedding_array(paths.pytorch_embeddings, "PyTorch parity embeddings")
@@ -230,6 +273,12 @@ def inspect_embeddings(paths: ReleasePaths) -> EmbeddingEvidence:
             raise ValueError("PyTorch and Core ML parity embedding shapes differ")
         if pytorch.shape[0] <= 0 or pytorch.shape[1] != EMBEDDING_DIMENSION:
             raise ValueError("parity embeddings must have positive shape (N, 384)")
+        _validate_parity_report(
+            paths,
+            package_digest=package_digest,
+            catalog_digest=catalog_digest,
+            sample_count=int(pytorch.shape[0]),
+        )
     except (EOFError, OSError, OverflowError, ValueError, TypeError) as error:
         detail = str(error)
         return EmbeddingEvidence(
@@ -484,6 +533,8 @@ def _validate_export_metadata(payload: Mapping[str, Any]) -> None:
         if not isinstance(payload[name], str) or payload[name] != expected:
             raise ValueError(f"export metadata field does not match release contract: {name}")
     require_sha256(payload["package_sha256"], "export package digest")
+    if payload["source_artifact_sha256"] != DINOV2_ARTIFACT_SHA256:
+        raise ValueError("export source artifact digests do not match the release contract")
     tools = payload["tool_versions"]
     if not isinstance(tools, dict) or tools != dict(_TOOL_VERSIONS):
         raise ValueError("export tool versions do not match the audited release contract")
@@ -501,17 +552,11 @@ def _exact_shape(value: object, expected: tuple[int, ...], name: str) -> None:
 
 
 def _load_embedding_array(path: Path, name: str) -> np.ndarray:
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"{name} file is missing")
-    value = np.load(path, allow_pickle=False)
-    valid = (
-        isinstance(value, np.ndarray)
-        and value.dtype == np.dtype(np.float32)
-        and value.ndim == 2
+    return load_bounded_parity_array(
+        path,
+        name,
+        expected_columns=EMBEDDING_DIMENSION,
     )
-    if not valid:
-        raise ValueError(f"{name} must be an exact two-dimensional float32 NumPy array")
-    return np.array(value, dtype=np.float32, order="C", copy=True)
 
 
 def _unit_norms(values: np.ndarray, name: str) -> np.ndarray:
@@ -562,7 +607,52 @@ def _load_evaluation_report(
         raise ValueError("report package digest does not match the release")
     if catalog_digest is None or payload["catalogManifestSha256"] != catalog_digest:
         raise ValueError("report catalog digest does not match the release")
+    _validate_production_evidence(payload)
     return payload
+
+
+def _validate_parity_report(
+    paths: ReleasePaths,
+    *,
+    package_digest: str | None,
+    catalog_digest: str | None,
+    sample_count: int,
+) -> None:
+    payload = load_json_mapping(paths.parity_report, "parity report")
+    if set(payload) != _PARITY_REPORT_KEYS:
+        raise ValueError("parity report fields do not match the exact schema")
+    schema = payload["schemaVersion"]
+    if isinstance(schema, bool) or not isinstance(schema, int) or schema != 1:
+        raise ValueError("parity report schemaVersion must be the integer 1")
+    if payload["evaluationType"] != "pytorchCoreMLParity":
+        raise ValueError("parity report identity does not match its fixed release path")
+    if package_digest is None or payload["modelPackageSha256"] != package_digest:
+        raise ValueError("parity report package digest does not match the release")
+    if catalog_digest is None or payload["catalogManifestSha256"] != catalog_digest:
+        raise ValueError("parity report catalog digest does not match the release")
+    if payload["sourceModelSha256"] != DINOV2_ARTIFACT_SHA256["model.safetensors"]:
+        raise ValueError("parity report source model digest does not match the release")
+    if payload["preprocessingVersion"] != mobile_model_contract().preprocessing_version:
+        raise ValueError("parity report preprocessing version does not match the release")
+    if positive_integer(payload["sampleCount"], "parity sampleCount") != sample_count:
+        raise ValueError("parity report sampleCount does not match the arrays")
+    if payload["pytorchEmbeddingsSha256"] != sha256_file(paths.pytorch_embeddings):
+        raise ValueError("parity report PyTorch array digest does not match")
+    if payload["coremlEmbeddingsSha256"] != sha256_file(paths.coreml_embeddings):
+        raise ValueError("parity report Core ML array digest does not match")
+    _validate_production_evidence(payload)
+
+
+def _validate_production_evidence(payload: Mapping[str, Any]) -> None:
+    if payload["evidencePurpose"] != "production":
+        raise ValueError("report evidencePurpose must be production")
+    provenance = payload["provenanceUrl"]
+    if not isinstance(provenance, str):
+        raise ValueError("report provenanceUrl must be an absolute HTTPS URL")
+    parsed = urlsplit(provenance)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError("report provenanceUrl must be an absolute HTTPS URL")
+    require_sha256(payload["fixtureSetSha256"], "report fixtureSetSha256")
 
 
 def _closed_metrics(payload: Mapping[str, Any]) -> tuple[float, float]:

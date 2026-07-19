@@ -9,6 +9,7 @@ import json
 import os
 import platform
 import shutil
+import subprocess
 import tempfile
 from collections.abc import Callable, Mapping
 from copy import deepcopy
@@ -21,7 +22,7 @@ from uuid import NAMESPACE_URL, uuid5
 import torch
 
 from fluke_model.mobile_export import mobile_model_contract
-from fluke_model.model_artifact import verify_dinov2_artifact
+from fluke_model.model_artifact import DINOV2_ARTIFACT_SHA256, verify_dinov2_artifact
 
 COREML_PACKAGE_NAME = "FlukeEmbedder.mlpackage"
 EXPORT_METADATA_NAME = "export-metadata.json"
@@ -112,12 +113,15 @@ class ExportMetadata:
     input_shape: tuple[int, int, int, int]
     output_shape: tuple[int, int]
     model_sha256: str
+    source_artifact_sha256: Mapping[str, str]
     package_sha256: str
     tool_versions: Mapping[str, str]
 
     def __post_init__(self) -> None:
         immutable_versions = MappingProxyType(dict(sorted(self.tool_versions.items())))
+        immutable_sources = MappingProxyType(dict(sorted(self.source_artifact_sha256.items())))
         object.__setattr__(self, "tool_versions", immutable_versions)
+        object.__setattr__(self, "source_artifact_sha256", immutable_sources)
 
     def as_json_dict(self) -> dict[str, object]:
         """Return a JSON-compatible copy with deterministic key/value ordering."""
@@ -128,6 +132,7 @@ class ExportMetadata:
             "model_id": self.model_id,
             "model_revision": self.model_revision,
             "model_sha256": self.model_sha256,
+            "source_artifact_sha256": dict(self.source_artifact_sha256),
             "output_shape": list(self.output_shape),
             "package_sha256": self.package_sha256,
             "preprocessing_version": self.preprocessing_version,
@@ -142,17 +147,22 @@ class _ExportDependencies:
     torch: Any
     auto_model: Any
     transformers_version: str
+    pillow_version: str
 
 
 def build_export_metadata(
     *,
     model_sha256: str,
     package_sha256: str,
+    source_artifact_sha256: Mapping[str, str],
     tool_versions: Mapping[str, str],
 ) -> ExportMetadata:
     """Build immutable metadata after validating all external digest/version input."""
     _validate_sha256("model_sha256", model_sha256)
     _validate_sha256("package_sha256", package_sha256)
+    normalized_sources = _validate_source_artifact_sha256(source_artifact_sha256)
+    if normalized_sources[_MODEL_FILENAME] != model_sha256:
+        raise CoreMLExportError("model_sha256 must match source_artifact_sha256")
     normalized_versions = _validate_tool_versions(tool_versions)
     contract = mobile_model_contract()
     return ExportMetadata(
@@ -164,6 +174,7 @@ def build_export_metadata(
         input_shape=contract.input_shape,
         output_shape=contract.output_shape,
         model_sha256=model_sha256,
+        source_artifact_sha256=normalized_sources,
         package_sha256=package_sha256,
         tool_versions=normalized_versions,
     )
@@ -243,6 +254,10 @@ def export_coreml(artifact_dir: Path, output_dir: Path) -> ExportMetadata:
     metadata = build_export_metadata(
         model_sha256=_sha256_file(source / _MODEL_FILENAME),
         package_sha256=package_tree_sha256(package_path),
+        source_artifact_sha256={
+            filename: _sha256_file(source / filename)
+            for filename in sorted(DINOV2_ARTIFACT_SHA256)
+        },
         tool_versions=_tool_versions(dependencies),
     )
     _write_json_atomic(destination / EXPORT_METADATA_NAME, metadata.as_json_dict())
@@ -256,7 +271,7 @@ def publish_coreml_export(
     replace: bool,
     exporter: Callable[[Path, Path], ExportMetadata] = export_coreml,
     exchange: Callable[[Path, Path], None] | None = None,
-    spec_loader: Callable[[Path], Any] | None = None,
+    package_loader: Callable[[Path], Any] | None = None,
 ) -> ExportMetadata:
     """Stage an export beside its destination, then publish it with an atomic rename."""
     source = Path(artifact_dir)
@@ -267,7 +282,7 @@ def publish_coreml_export(
     preserve_staging = False
     try:
         metadata = exporter(source, staging)
-        _validate_staged_export(staging, metadata, spec_loader=spec_loader)
+        _validate_staged_export(staging, metadata, package_loader=package_loader)
         if destination.exists():
             exchange_directories = exchange or _atomic_exchange_directories
             try:
@@ -428,6 +443,16 @@ def _validate_tool_versions(tool_versions: Mapping[str, str]) -> dict[str, str]:
     return normalized
 
 
+def _validate_source_artifact_sha256(values: Mapping[str, str]) -> dict[str, str]:
+    expected = frozenset(DINOV2_ARTIFACT_SHA256)
+    if not isinstance(values, Mapping) or frozenset(values) != expected:
+        raise CoreMLExportError("source_artifact_sha256 fields do not match the exact schema")
+    normalized = dict(sorted(values.items()))
+    for filename, digest in normalized.items():
+        _validate_sha256(f"source_artifact_sha256[{filename}]", digest)
+    return normalized
+
+
 def _update_framed(digest: Any, entry_type: bytes, relative_path: bytes) -> None:
     digest.update(entry_type)
     digest.update(len(relative_path).to_bytes(8, byteorder="big"))
@@ -581,6 +606,7 @@ def _load_export_dependencies() -> _ExportDependencies:
         import numpy
         import torch
         import transformers
+        from PIL import __version__ as pillow_version
         from transformers import AutoModel
     except ImportError as error:
         raise CoreMLExportError(
@@ -592,17 +618,40 @@ def _load_export_dependencies() -> _ExportDependencies:
         torch=torch,
         auto_model=AutoModel,
         transformers_version=transformers.__version__,
+        pillow_version=pillow_version,
     )
 
 
 def _tool_versions(dependencies: _ExportDependencies) -> dict[str, str]:
     return {
         "coremltools": dependencies.coremltools.__version__,
+        "macos": platform.mac_ver()[0],
         "numpy": dependencies.numpy.__version__,
+        "pillow": dependencies.pillow_version,
         "python": platform.python_version(),
         "torch": dependencies.torch.__version__,
         "transformers": dependencies.transformers_version,
+        "xcode": _xcode_version(),
     }
+
+
+def _xcode_version() -> str:
+    try:
+        result = subprocess.run(
+            ["xcodebuild", "-version"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError) as error:
+        raise CoreMLExportError(f"Xcode version cannot be recorded: {error}") from error
+    lines = tuple(line.strip() for line in result.stdout.splitlines() if line.strip())
+    if len(lines) != 2 or not lines[0].startswith("Xcode ") or not lines[1].startswith(
+        "Build version "
+    ):
+        raise CoreMLExportError("Xcode version output does not match the expected format")
+    return f"{lines[0].removeprefix('Xcode ')} ({lines[1].removeprefix('Build version ')})"
 
 
 def _write_json_atomic(path: Path, payload: Mapping[str, object]) -> None:
@@ -642,7 +691,7 @@ def _validate_staged_export(
     staging: Path,
     metadata: ExportMetadata,
     *,
-    spec_loader: Callable[[Path], Any] | None,
+    package_loader: Callable[[Path], Any] | None,
 ) -> None:
     package_path = staging / COREML_PACKAGE_NAME
     metadata_path = staging / EXPORT_METADATA_NAME
@@ -666,28 +715,32 @@ def _validate_staged_export(
         raise CoreMLExportError(f"staged export metadata is invalid: {error}") from error
     if serialized_metadata != metadata.as_json_dict():
         raise CoreMLExportError("staged export metadata does not match exporter result")
-    _validate_coreml_package_interface(package_path, spec_loader=spec_loader)
+    validate_coreml_package_interface(package_path, package_loader=package_loader)
 
 
-def _validate_coreml_package_interface(
+def validate_coreml_package_interface(
     package_path: Path,
     *,
-    spec_loader: Callable[[Path], Any] | None,
+    package_loader: Callable[[Path], Any] | None = None,
 ) -> None:
-    loader = spec_loader or _load_coreml_package_spec
+    """Reload an isolated package and require the exact public tensor interface."""
+    package = Path(package_path)
+    if package.is_symlink() or not package.is_dir():
+        raise CoreMLExportError("Core ML package must be a regular directory for reload")
+    loader = package_loader or _load_coreml_package_spec
     try:
-        spec = _load_isolated_coreml_spec(package_path, loader)
+        spec = _load_isolated_coreml_spec(package, loader)
         inputs = _coreml_feature_contract(spec.description.input)
         outputs = _coreml_feature_contract(spec.description.output)
     except CoreMLExportError:
         raise
     except Exception as error:
-        raise CoreMLExportError(f"staged Core ML package reload failed: {error}") from error
+        raise CoreMLExportError(f"Core ML package reload failed: {error}") from error
     contract = mobile_model_contract()
     expected_inputs = (("pixels", contract.input_shape, _COREML_FLOAT32_DATA_TYPE),)
     expected_outputs = (("embedding", contract.output_shape, _COREML_FLOAT32_DATA_TYPE),)
     if inputs != expected_inputs or outputs != expected_outputs:
-        raise CoreMLExportError("staged Core ML package interface does not match contract")
+        raise CoreMLExportError("Core ML package interface does not match contract")
 
 
 def _load_isolated_coreml_spec(

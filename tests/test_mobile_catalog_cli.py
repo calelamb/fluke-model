@@ -34,10 +34,13 @@ MODEL_REVISION = "ed25f3a31f01632728cabb09d1542f84ab7b0056"
 PREPROCESSING_VERSION = "dinov2-imagenet-v1"
 TOOL_VERSIONS = {
     "coremltools": "9.0",
+    "macos": "26.5.1",
     "numpy": "2.2.6",
+    "pillow": "12.3.0",
     "python": "3.11.15",
     "torch": "2.13.0",
     "transformers": "5.14.0",
+    "xcode": "26.0.1 (17A400)",
 }
 
 
@@ -49,6 +52,7 @@ def _export_metadata(package_sha256: str = "a" * 64) -> dict[str, Any]:
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
         "model_sha256": DINOV2_ARTIFACT_SHA256["model.safetensors"],
+        "source_artifact_sha256": dict(DINOV2_ARTIFACT_SHA256),
         "output_shape": [1, 384],
         "package_sha256": package_sha256,
         "preprocessing_version": PREPROCESSING_VERSION,
@@ -87,6 +91,16 @@ def _add_tool(payload: dict[str, Any]) -> dict[str, Any]:
         (lambda value: _replace(value, model_revision="other-revision"), "model identity"),
         (lambda value: _replace(value, preprocessing_version="other"), "preprocessing"),
         (lambda value: _replace(value, model_sha256="b" * 64), "source model digest"),
+        (
+            lambda value: _replace(
+                value,
+                source_artifact_sha256={
+                    **DINOV2_ARTIFACT_SHA256,
+                    "config.json": "b" * 64,
+                },
+            ),
+            "source artifact digests",
+        ),
         (lambda value: _replace(value, package_sha256="not-a-digest"), "package digest"),
         (lambda value: _replace(value, input_shape=[1, 3, 224, True]), "input shape"),
         (lambda value: _replace(value, output_shape=[True, 384]), "output shape"),
@@ -95,9 +109,12 @@ def _add_tool(payload: dict[str, Any]) -> dict[str, Any]:
         (lambda value: _replace(value, tool_versions={}), "tool version fields"),
         (_add_tool, "tool version fields"),
         (lambda value: _replace_tool(value, coremltools="8.3"), "coremltools"),
+        (lambda value: _replace_tool(value, macos="26.5.0"), "macos"),
         (lambda value: _replace_tool(value, numpy="2.3.0"), "numpy"),
+        (lambda value: _replace_tool(value, pillow="12.2.0"), "pillow"),
         (lambda value: _replace_tool(value, torch="2.7.1"), "torch"),
         (lambda value: _replace_tool(value, transformers="5.3.0"), "transformers"),
+        (lambda value: _replace_tool(value, xcode="26.0.0 (17A400)"), "xcode"),
         (lambda value: _replace_tool(value, python="3.12.1"), "python"),
         (lambda value: _replace_tool(value, python="3.11.0"), "python"),
         (lambda value: _replace_tool(value, python="3.11.14"), "python"),
@@ -257,6 +274,10 @@ def _valid_cli_inputs(tmp_path: Path) -> tuple[dict[str, Path], list[str]]:
         "synthetic-test",
         "--index-version",
         "synthetic-test",
+        "--minimum-app-build",
+        "1",
+        "--maximum-app-build",
+        "100",
         "--score-threshold",
         "0.7",
         "--margin-threshold",
@@ -341,7 +362,7 @@ def test_cli_score_semantics_is_literal(tmp_path: Path) -> None:
     parser = cli.build_parser()
     _, arguments = _valid_cli_inputs(tmp_path)
     parsed = parser.parse_args(arguments[1:])
-    assert parsed.score_semantics == "cosineSimilarity"
+    assert parsed.score_semantics == "uncalibrated_similarity_not_probability"
 
     with pytest.raises(SystemExit):
         parser.parse_args([*arguments[1:], "--score-semantics", "other"])

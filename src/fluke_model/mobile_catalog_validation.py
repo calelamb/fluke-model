@@ -34,6 +34,8 @@ _MANIFEST_KEYS = {
     "embeddingDimension",
     "dtype",
     "indexVersion",
+    "minimumAppBuild",
+    "maximumAppBuild",
     "referenceCount",
     "catalogCount",
     "vectorsSha256",
@@ -87,6 +89,10 @@ def _parse_manifest(payload: Mapping[str, Any]) -> MobileCatalogManifest:
     embedding_dimension = _positive_integer(payload["embeddingDimension"], "embeddingDimension")
     reference_count = _positive_integer(payload["referenceCount"], "referenceCount")
     catalog_count = _positive_integer(payload["catalogCount"], "catalogCount")
+    minimum_app_build = _positive_integer(payload["minimumAppBuild"], "minimumAppBuild")
+    maximum_app_build = _positive_integer(payload["maximumAppBuild"], "maximumAppBuild")
+    if minimum_app_build > maximum_app_build:
+        raise ValueError("minimumAppBuild must be less than or equal to maximumAppBuild")
     return MobileCatalogManifest(
         schema_version=schema_version,
         manifest_version=_nonempty_text(payload["manifestVersion"], "manifestVersion"),
@@ -100,6 +106,8 @@ def _parse_manifest(payload: Mapping[str, Any]) -> MobileCatalogManifest:
         embedding_dimension=embedding_dimension,
         dtype=_exact_text(payload["dtype"], _VECTOR_DTYPE, "dtype"),
         index_version=_nonempty_text(payload["indexVersion"], "indexVersion"),
+        minimum_app_build=minimum_app_build,
+        maximum_app_build=maximum_app_build,
         reference_count=reference_count,
         catalog_count=catalog_count,
         vectors_sha256=_sha256(payload["vectorsSha256"], "vectorsSha256"),

@@ -41,18 +41,31 @@ _EXPORT_METADATA_KEYS = {
     "model_id",
     "model_revision",
     "model_sha256",
+    "source_artifact_sha256",
     "output_shape",
     "package_sha256",
     "preprocessing_version",
     "tool_versions",
 }
 _REFERENCE_KEYS = {"referencePhotoId", "whaleId", "catalogId", "sourceId"}
-_TOOL_VERSION_KEYS = {"coremltools", "numpy", "python", "torch", "transformers"}
+_TOOL_VERSION_KEYS = {
+    "coremltools",
+    "macos",
+    "numpy",
+    "pillow",
+    "python",
+    "torch",
+    "transformers",
+    "xcode",
+}
 _AUDITED_TOOL_VERSIONS = {
     "coremltools": "9.0",
+    "macos": "26.5.1",
     "numpy": "2.2.6",
+    "pillow": "12.3.0",
     "torch": "2.13.0",
     "transformers": "5.14.0",
+    "xcode": "26.0.1 (17A400)",
 }
 _AUDITED_PYTHON_VERSION = "3.11.15"
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -70,6 +83,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest-version", required=True)
     parser.add_argument("--model-version", required=True)
     parser.add_argument("--index-version", required=True)
+    parser.add_argument("--minimum-app-build", type=int, required=True)
+    parser.add_argument("--maximum-app-build", type=int, required=True)
     parser.add_argument(
         "--score-semantics", choices=(SCORE_SEMANTICS,), default=SCORE_SEMANTICS
     )
@@ -164,6 +179,8 @@ def _validate_export_identity(payload: dict[str, Any]) -> None:
         raise ValueError("Core ML export preprocessing version does not match the pinned contract")
     if payload["model_sha256"] != DINOV2_ARTIFACT_SHA256["model.safetensors"]:
         raise ValueError("Core ML export source model digest does not match the pinned artifact")
+    if payload["source_artifact_sha256"] != DINOV2_ARTIFACT_SHA256:
+        raise ValueError("Core ML export source artifact digests do not match the pinned artifact")
     package_sha256 = payload["package_sha256"]
     if not isinstance(package_sha256, str) or _SHA256_PATTERN.fullmatch(package_sha256) is None:
         raise ValueError("Core ML export package digest must be a lowercase SHA256")
@@ -255,6 +272,8 @@ def _release_from_args(
         preprocessing_version=export["preprocessing_version"],
         embedding_dimension=dimension,
         index_version=args.index_version,
+        minimum_app_build=args.minimum_app_build,
+        maximum_app_build=args.maximum_app_build,
         score_semantics=args.score_semantics,
         score_threshold=args.score_threshold,
         margin_threshold=args.margin_threshold,

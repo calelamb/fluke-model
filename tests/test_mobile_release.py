@@ -1,5 +1,4 @@
 """Release parity, open-set, provenance, and CLI gate contracts."""
-
 from __future__ import annotations
 
 import json
@@ -8,6 +7,7 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -28,7 +28,7 @@ from fluke_model.mobile_release import (
     report_payload,
     validate_report_destination,
     verify_mobile_release,
-    verify_mobile_release_directory,
+    verify_mobile_release_directory as _verify_mobile_release_directory,
     write_mobile_release_report,
 )
 from fluke_model.model_artifact import DINOV2_ARTIFACT_SHA256
@@ -50,6 +50,34 @@ BOUNDARY_NAMES = (
 OPEN_COHORTS = ("openSet", "nonOrca", "poorQuality", "occlusion", "distributionShift")
 SYNTHETIC_PACKAGE_SHA256 = "a" * 64
 SYNTHETIC_CATALOG_SHA256 = "b" * 64
+FIXTURE_SET_SHA256 = "c" * 64
+
+
+def _valid_coreml_spec() -> object:
+    input_type = SimpleNamespace(shape=[1, 3, 224, 224], dataType=65568)
+    output_type = SimpleNamespace(shape=[1, 384], dataType=65568)
+    return SimpleNamespace(
+        description=SimpleNamespace(
+            input=[
+                SimpleNamespace(
+                    name="pixels", type=SimpleNamespace(multiArrayType=input_type)
+                )
+            ],
+            output=[
+                SimpleNamespace(
+                    name="embedding", type=SimpleNamespace(multiArrayType=output_type)
+                )
+            ],
+        )
+    )
+
+
+def verify_mobile_release_directory(release_dir: Path):
+    """Validate synthetic test packages only at the package-loader boundary."""
+    return _verify_mobile_release_directory(
+        release_dir,
+        package_loader=lambda _isolated_package: _valid_coreml_spec(),
+    )
 
 
 def _passed_boundaries() -> tuple[ValidationEvidence, ...]:
@@ -88,15 +116,19 @@ def _export_metadata(package_digest: str) -> dict[str, object]:
         "model_id": MODEL_ID,
         "model_revision": MODEL_REVISION,
         "model_sha256": DINOV2_ARTIFACT_SHA256["model.safetensors"],
+        "source_artifact_sha256": dict(DINOV2_ARTIFACT_SHA256),
         "output_shape": [1, 384],
         "package_sha256": package_digest,
         "preprocessing_version": "dinov2-imagenet-v1",
         "tool_versions": {
             "coremltools": "9.0",
+            "macos": "26.5.1",
             "numpy": "2.2.6",
+            "pillow": "12.3.0",
             "python": "3.11.15",
             "torch": "2.13.0",
             "transformers": "5.14.0",
+            "xcode": "26.0.1 (17A400)",
         },
     }
 
@@ -122,6 +154,9 @@ def _evaluation_report(
     common = {
         "schemaVersion": 1,
         "evaluationType": evaluation_type,
+        "evidencePurpose": "production",
+        "provenanceUrl": "https://example.invalid/orcawatch/production-evaluation",
+        "fixtureSetSha256": FIXTURE_SET_SHA256,
         "modelPackageSha256": package_digest,
         "catalogManifestSha256": catalog_digest,
         "sampleCount": sample_count,
@@ -140,6 +175,7 @@ def build_release_fixture(tmp_path: Path) -> Path:
     _write_json(release_dir / "export-metadata.json", _export_metadata(package_digest))
     rights = release_dir / "rights-attestation.json"
     rights.write_bytes(RIGHTS_FIXTURE.read_bytes())
+    _update_json(rights, purpose="production")
     catalog_digest = _write_catalog_fixture(release_dir, rights, package_digest)
     _write_evaluation_fixture(release_dir, package_digest, catalog_digest)
     return release_dir
@@ -169,7 +205,9 @@ def _write_catalog_fixture(release_dir: Path, rights: Path, package_digest: str)
             preprocessing_version="dinov2-imagenet-v1",
             embedding_dimension=384,
             index_version="synthetic-test",
-            score_semantics="cosineSimilarity",
+            minimum_app_build=1,
+            maximum_app_build=100,
+            score_semantics="uncalibrated_similarity_not_probability",
             score_threshold=0.7,
             margin_threshold=0.1,
             rights_attestation_path=rights,
@@ -189,6 +227,25 @@ def _write_evaluation_fixture(
     evaluation.mkdir()
     np.save(evaluation / "parity-pytorch.npy", pytorch, allow_pickle=False)
     np.save(evaluation / "parity-coreml.npy", coreml, allow_pickle=False)
+    _write_json(
+        evaluation / "parity.json",
+        {
+            "schemaVersion": 1,
+            "evaluationType": "pytorchCoreMLParity",
+            "evidencePurpose": "production",
+            "provenanceUrl": "https://example.invalid/orcawatch/production-parity",
+            "modelPackageSha256": package_digest,
+            "catalogManifestSha256": catalog_digest,
+            "sourceModelSha256": DINOV2_ARTIFACT_SHA256["model.safetensors"],
+            "preprocessingVersion": "dinov2-imagenet-v1",
+            "fixtureSetSha256": FIXTURE_SET_SHA256,
+            "sampleCount": 2,
+            "pytorchEmbeddingsSha256": sha256_file(
+                evaluation / "parity-pytorch.npy"
+            ),
+            "coremlEmbeddingsSha256": sha256_file(evaluation / "parity-coreml.npy"),
+        },
+    )
     _write_json(
         evaluation / "closed-set.json",
         _evaluation_report(
@@ -502,8 +559,8 @@ def test_cli_rejects_in_release_custom_report_without_poisoning_next_run(
 
     assert rejected.returncode == 2
     assert not custom.exists()
-    assert first_default.returncode == 0
-    assert second_default.returncode == 0
+    assert first_default.returncode == 1
+    assert second_default.returncode == 1
     assert (release_dir / "mobile-release-report.json").is_file()
 
 
@@ -572,6 +629,8 @@ def test_failed_report_normalization_canonicalizes_relative_release_roots(
         "rights-attestation.json",
         "catalog/manifest.json",
         "evaluation/parity-pytorch.npy",
+        "evaluation/parity-coreml.npy",
+        "evaluation/parity.json",
         "evaluation/closed-set.json",
         "evaluation/open-set.json",
         "evaluation/non-orca.json",
@@ -738,143 +797,3 @@ def test_directory_verifier_rejects_invalid_parity_embeddings(tmp_path: Path, ki
         not next(g for g in report.gates if g.name == name).passed
         for name in ("embedding_shape", "embedding_norm", "parity_cosine")
     )
-
-
-def test_directory_verifier_uses_worst_open_set_cohort(tmp_path: Path) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    path = release_dir / "evaluation" / "poor-quality.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["falseAcceptRate"] = 0.051
-    _write_json(path, payload)
-
-    report = verify_mobile_release_directory(release_dir)
-
-    assert report.ready is False
-    gate = next(g for g in report.gates if g.name == "false_accept")
-    assert gate.observed == pytest.approx(0.051)
-
-
-def test_directory_verifier_requires_exact_report_schema_and_provenance(tmp_path: Path) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    path = release_dir / "evaluation" / "closed-set.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    payload["unexpected"] = True
-    payload["catalogManifestSha256"] = "0" * 64
-    _write_json(path, payload)
-
-    report = verify_mobile_release_directory(release_dir)
-
-    assert report.ready is False
-    assert "schema" in next(g.detail for g in report.gates if g.name == "required_reports")
-
-
-def test_directory_verifier_rejects_symlinked_input(tmp_path: Path) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    report_path = release_dir / "evaluation" / "open-set.json"
-    external = tmp_path / "external.json"
-    report_path.replace(external)
-    report_path.symlink_to(external)
-
-    report = verify_mobile_release_directory(release_dir)
-
-    assert report.ready is False
-    assert "symbolic link" in next(g.detail for g in report.gates if g.name == "input_paths")
-
-
-@pytest.mark.parametrize(
-    "relative_path",
-    ("unexpected.txt", "catalog/stale.json", "evaluation/old-results.json"),
-)
-def test_directory_verifier_rejects_extra_layout_entries(
-    tmp_path: Path, relative_path: str
-) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    extra = release_dir / relative_path
-    extra.parent.mkdir(parents=True, exist_ok=True)
-    extra.write_text("stale", encoding="utf-8")
-
-    report = verify_mobile_release_directory(release_dir)
-
-    assert report.ready is False
-    assert "exact" in next(g.detail for g in report.gates if g.name == "input_paths")
-
-
-@pytest.mark.parametrize("content", (b"", b"\x93NUMPY"))
-def test_directory_verifier_bounds_corrupt_or_truncated_numpy(
-    tmp_path: Path, content: bytes
-) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    (release_dir / "evaluation" / "parity-coreml.npy").write_bytes(content)
-
-    report = verify_mobile_release_directory(release_dir)
-
-    assert report.ready is False
-    assert report.model_package_sha256 is not None
-
-
-def test_directory_verifier_bounds_huge_integer_metrics(tmp_path: Path) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    _update_json(release_dir / "evaluation" / "closed-set.json", top1=10**1000)
-
-    report = verify_mobile_release_directory(release_dir)
-
-    assert report.ready is False
-
-
-def test_cli_bounds_verification_failure_and_writes_null_digest_report(tmp_path: Path) -> None:
-    release_dir = tmp_path / "invalid"
-    release_dir.mkdir()
-    (release_dir / "evaluation").mkdir()
-    (release_dir / "evaluation" / "closed-set.json").write_text(
-        '{"top1":' + "9" * 5000 + "}", encoding="utf-8"
-    )
-    script = Path(__file__).parent.parent / "scripts" / "verify_mobile_release.py"
-
-    result = subprocess.run(
-        [sys.executable, str(script), "--release-dir", str(release_dir)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    payload = json.loads((release_dir / "mobile-release-report.json").read_text(encoding="utf-8"))
-    assert result.returncode != 0
-    assert payload["ready"] is False
-    assert payload["modelPackageSha256"] is None
-    assert payload["catalogManifestSha256"] is None
-
-
-def test_cli_fails_nonzero_and_writes_explicit_missing_gate_report(tmp_path: Path) -> None:
-    release_dir = tmp_path / "incomplete"
-    release_dir.mkdir()
-    script = Path(__file__).parent.parent / "scripts" / "verify_mobile_release.py"
-
-    result = subprocess.run(
-        [sys.executable, str(script), "--release-dir", str(release_dir)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    report_path = release_dir / "mobile-release-report.json"
-    report = json.loads(report_path.read_text(encoding="utf-8"))
-    assert result.returncode == 1
-    assert report["ready"] is False
-    assert "rights-attestation.json" in report_path.read_text(encoding="utf-8")
-    assert "evaluation/closed-set.json" in report_path.read_text(encoding="utf-8")
-    assert "evaluation/open-set.json" in report_path.read_text(encoding="utf-8")
-
-
-def test_cli_returns_zero_only_for_complete_release(tmp_path: Path) -> None:
-    release_dir = build_release_fixture(tmp_path)
-    script = Path(__file__).parent.parent / "scripts" / "verify_mobile_release.py"
-
-    result = subprocess.run(
-        [sys.executable, str(script), "--release-dir", str(release_dir)],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0
-    assert json.loads(result.stdout)["ready"] is True

@@ -39,6 +39,8 @@ MANIFEST_KEYS = {
     "embeddingDimension",
     "dtype",
     "indexVersion",
+    "minimumAppBuild",
+    "maximumAppBuild",
     "referenceCount",
     "catalogCount",
     "vectorsSha256",
@@ -67,7 +69,9 @@ def release_fixture(
         preprocessing_version="dinov2-imagenet-v1",
         embedding_dimension=embedding_dimension,
         index_version="mobile-reference-v1",
-        score_semantics="cosineSimilarity",
+        minimum_app_build=1,
+        maximum_app_build=100,
+        score_semantics="uncalibrated_similarity_not_probability",
         score_threshold=score_threshold,
         margin_threshold=margin_threshold,
         rights_attestation_path=rights_path,
@@ -123,7 +127,7 @@ def test_catalog_uses_exact_camel_case_client_schema(tmp_path: Path) -> None:
     raw_metadata = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
     assert set(raw_manifest) == MANIFEST_KEYS
     assert raw_manifest == manifest_payload(manifest)
-    assert raw_manifest["scoreSemantics"] == "cosineSimilarity"
+    assert raw_manifest["scoreSemantics"] == "uncalibrated_similarity_not_probability"
     assert len(raw_metadata) == 1
     assert set(raw_metadata[0]) == METADATA_KEYS
     assert raw_metadata[0] == {
@@ -434,12 +438,14 @@ def test_manifest_payload_does_not_expose_dataclass_field_names() -> None:
         embedding_dimension=3,
         dtype="float16",
         index_version="index",
+        minimum_app_build=1,
+        maximum_app_build=100,
         reference_count=1,
         catalog_count=1,
         vectors_sha256="b" * 64,
         metadata_sha256="c" * 64,
         rights_attestation_sha256="d" * 64,
-        score_semantics="cosineSimilarity",
+        score_semantics="uncalibrated_similarity_not_probability",
         score_threshold=0.7,
         margin_threshold=0.1,
     )
