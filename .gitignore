@@ -1,5 +1,7 @@
 data/
 artifacts/
+# Generated Core ML release candidates are reproducible build outputs.
+artifacts/mobile-release/
 *.pt
 *.pth
 *.faiss
@@ -11,6 +13,7 @@ __pycache__/
 .coverage
 .ruff_cache/
 .DS_Store
+.worktrees/
 *.egg-info/
 build/
 dist/

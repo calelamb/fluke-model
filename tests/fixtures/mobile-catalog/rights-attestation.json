@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "purpose": "test",
+  "approved_by": "OrcaWatch synthetic fixture generator",
+  "approved_at": "2026-07-18T00:00:00+00:00",
+  "commercial_use_allowed": true,
+  "model": {
+    "model_id": "facebook/dinov2-small",
+    "revision": "ed25f3a31f01632728cabb09d1542f84ab7b0056",
+    "license_spdx": "Apache-2.0",
+    "evidence_url": "https://github.com/facebookresearch/dinov2/blob/main/LICENSE",
+    "commercial_use_allowed": true
+  },
+  "data_sources": [
+    {
+      "source_id": "synthetic-owned-fixture",
+      "license_or_permission": "Project-generated synthetic test vector; no source image exists",
+      "evidence_url": "https://example.invalid/orcawatch/synthetic-fixture-rights",
+      "commercial_use_allowed": true,
+      "redistribution_allowed": true,
+      "mobile_ml_use_allowed": true
+    }
+  ]
+}
