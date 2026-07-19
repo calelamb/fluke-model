@@ -1,5 +1,7 @@
 data/
 artifacts/
+# Generated Core ML release candidates are reproducible build outputs.
+artifacts/mobile-release/
 *.pt
 *.pth
 *.faiss
