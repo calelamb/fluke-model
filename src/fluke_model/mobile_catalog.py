@@ -21,6 +21,7 @@ from fluke_model.rights import EXPECTED_MODEL_LICENSE_SPDX, ModelRights, RightsE
 
 _SCHEMA_VERSION = 1
 _VECTOR_DTYPE = "float16"
+SCORE_SEMANTICS = "cosineSimilarity"
 _HASH_CHUNK_BYTES = 1024 * 1024
 _MAX_RIGHTS_BYTES = 1024 * 1024
 _SHA256_LENGTH = 64
@@ -265,6 +266,8 @@ def _validate_release(release: MobileCatalogRelease) -> None:
     )
     if any(not isinstance(value, str) or not value.strip() for value in text_fields):
         raise ValueError("release text fields must be non-empty strings")
+    if release.score_semantics != SCORE_SEMANTICS:
+        raise ValueError(f"score semantics must be {SCORE_SEMANTICS}")
     if not isinstance(release.embedding_dimension, int) or isinstance(
         release.embedding_dimension, bool
     ):

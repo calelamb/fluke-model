@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import FrozenInstanceError, replace
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -64,7 +65,7 @@ def release_fixture(
         preprocessing_version="dinov2-imagenet-v1",
         embedding_dimension=embedding_dimension,
         index_version="mobile-reference-v1",
-        score_semantics="cosine_similarity_not_probability",
+        score_semantics="cosineSimilarity",
         score_threshold=score_threshold,
         margin_threshold=margin_threshold,
         rights_attestation_path=rights_path,
@@ -77,9 +78,19 @@ def rows_fixture() -> tuple[ReferenceRow, ...]:
     )
 
 
-def _write_rights(tmp_path: Path, update: object) -> Path:
-    payload = json.loads(RIGHTS_FIXTURE.read_text(encoding="utf-8"))
-    update(payload)
+def _rights_payload() -> dict[str, Any]:
+    return json.loads(RIGHTS_FIXTURE.read_text(encoding="utf-8"))
+
+
+def _with_source_updates(payload: dict[str, Any], **updates: object) -> dict[str, Any]:
+    first, *remaining = payload["data_sources"]
+    return {
+        **payload,
+        "data_sources": [{**first, **updates}, *(dict(source) for source in remaining)],
+    }
+
+
+def _write_rights(tmp_path: Path, payload: dict[str, Any]) -> Path:
     path = tmp_path / "rights.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
@@ -110,6 +121,7 @@ def test_catalog_uses_exact_camel_case_client_schema(tmp_path: Path) -> None:
     raw_metadata = json.loads((tmp_path / "metadata.json").read_text(encoding="utf-8"))
     assert set(raw_manifest) == MANIFEST_KEYS
     assert raw_manifest == manifest_payload(manifest)
+    assert raw_manifest["scoreSemantics"] == "cosineSimilarity"
     assert len(raw_metadata) == 1
     assert set(raw_metadata[0]) == METADATA_KEYS
     assert raw_metadata[0] == {
@@ -204,7 +216,7 @@ def test_catalog_requires_explicit_source_permissions(
 ) -> None:
     rights_path = _write_rights(
         tmp_path,
-        lambda payload: payload["data_sources"][0].__setitem__(field, False),
+        _with_source_updates(_rights_payload(), **{field: False}),
     )
     output = tmp_path / "catalog"
 
@@ -219,12 +231,12 @@ def test_catalog_requires_explicit_source_permissions(
 
 
 def test_catalog_requires_exact_rights_source_coverage(tmp_path: Path) -> None:
-    def add_extra_source(payload: dict[str, object]) -> None:
-        extra = dict(payload["data_sources"][0])
-        extra["source_id"] = "unused-source"
-        payload["data_sources"].append(extra)
-
-    rights_path = _write_rights(tmp_path, add_extra_source)
+    payload = _rights_payload()
+    extra = {**payload["data_sources"][0], "source_id": "unused-source"}
+    rights_path = _write_rights(
+        tmp_path,
+        {**payload, "data_sources": [*(dict(row) for row in payload["data_sources"]), extra]},
+    )
 
     with pytest.raises(RightsError, match="unused source"):
         write_mobile_catalog(
@@ -238,8 +250,8 @@ def test_catalog_requires_exact_rights_source_coverage(tmp_path: Path) -> None:
 def test_catalog_requires_https_rights_evidence(tmp_path: Path) -> None:
     rights_path = _write_rights(
         tmp_path,
-        lambda payload: payload["data_sources"][0].__setitem__(
-            "evidence_url", "http://example.invalid/rights"
+        _with_source_updates(
+            _rights_payload(), evidence_url="http://example.invalid/rights"
         ),
     )
 
@@ -287,6 +299,7 @@ def test_catalog_rejects_duplicate_or_unstable_identity_rows(
         replace(release_fixture(), embedding_dimension=3.0),
         replace(release_fixture(), model_sha256="not-a-sha"),
         replace(release_fixture(), model_sha256=123),
+        replace(release_fixture(), score_semantics="cosine_similarity_not_probability"),
     ],
 )
 def test_release_contract_rejects_invalid_counts_thresholds_and_hashes(
@@ -346,7 +359,7 @@ def test_manifest_payload_does_not_expose_dataclass_field_names() -> None:
         vectors_sha256="b" * 64,
         metadata_sha256="c" * 64,
         rights_attestation_sha256="d" * 64,
-        score_semantics="cosine_similarity_not_probability",
+        score_semantics="cosineSimilarity",
         score_threshold=0.7,
         margin_threshold=0.1,
     )
