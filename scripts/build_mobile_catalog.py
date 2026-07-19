@@ -54,7 +54,7 @@ _AUDITED_TOOL_VERSIONS = {
     "torch": "2.13.0",
     "transformers": "5.14.0",
 }
-_PYTHON_VERSION_PATTERN = re.compile(r"3\.11\.\d+")
+_AUDITED_PYTHON_VERSION = "3.11.15"
 _SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
 
 
@@ -191,8 +191,10 @@ def _validate_export_tool_versions(value: object) -> None:
         if value[name] != expected:
             raise ValueError(f"Core ML export {name} version does not match the audited contract")
     python_version = value["python"]
-    if not isinstance(python_version, str) or _PYTHON_VERSION_PATTERN.fullmatch(python_version) is None:
-        raise ValueError("Core ML export python version must be an audited Python 3.11.x release")
+    if python_version != _AUDITED_PYTHON_VERSION:
+        raise ValueError(
+            f"Core ML export python version must be audited {_AUDITED_PYTHON_VERSION}"
+        )
 
 
 def _is_exact_integer_shape(value: object, expected: tuple[int, ...]) -> bool:

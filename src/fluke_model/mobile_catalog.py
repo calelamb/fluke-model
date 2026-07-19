@@ -229,13 +229,15 @@ def write_mobile_catalog(
 ) -> MobileCatalogManifest:
     """Validate, stage, reread, and atomically publish one mobile catalog."""
     destination = Path(output_dir)
-    _validate_output_destination(destination)
     _validate_release(release)
+    rights_path = Path(release.rights_attestation_path)
+    _validate_catalog_paths(destination, rights_path)
+    _validate_output_destination(destination)
     normalized_rows = _validate_rows(rows)
     normalized_embeddings = validate_embeddings(embeddings, release.embedding_dimension)
     if normalized_embeddings.shape[0] != len(normalized_rows):
         raise ValueError("reference embedding row count does not match metadata row count")
-    rights, rights_sha256 = _load_mobile_rights(release.rights_attestation_path)
+    rights, rights_sha256 = _load_mobile_rights(rights_path)
     source_ids = tuple(sorted({row.source_id for row in normalized_rows}))
     rights.validate_for(
         model_id=release.model_id,
@@ -277,6 +279,30 @@ def _validate_release(release: MobileCatalogRelease) -> None:
     _validate_sha256("model SHA256", release.model_sha256)
     _validate_threshold("score threshold", release.score_threshold)
     _validate_threshold("margin threshold", release.margin_threshold)
+
+
+def _validate_catalog_paths(destination: Path, rights_path: Path) -> None:
+    _reject_symlink_components(destination, name="mobile catalog output")
+    _reject_symlink_components(rights_path, name="rights attestation")
+    resolved_destination = destination.resolve(strict=False)
+    resolved_rights = rights_path.resolve(strict=False)
+    if _paths_overlap(resolved_destination, resolved_rights):
+        raise ValueError("mobile catalog output and rights attestation paths overlap")
+
+
+def _reject_symlink_components(path: Path, *, name: str) -> None:
+    absolute = path.absolute()
+    for component in (*reversed(absolute.parents), absolute):
+        if component.is_symlink():
+            raise ValueError(f"{name} path contains a symbolic link component")
+
+
+def _paths_overlap(first: Path, second: Path) -> bool:
+    return (
+        first == second
+        or first.is_relative_to(second)
+        or second.is_relative_to(first)
+    )
 
 
 def _validate_rows(rows: Sequence[ReferenceRow]) -> tuple[ReferenceRow, ...]:

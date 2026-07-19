@@ -342,6 +342,84 @@ def test_catalog_refuses_to_replace_published_output(tmp_path: Path) -> None:
     assert marker.read_text(encoding="utf-8") == "preserve"
 
 
+def test_library_rejects_symlinked_output_ancestor_without_outside_mutation(
+    tmp_path: Path,
+) -> None:
+    real_parent = tmp_path / "real-output-parent"
+    real_parent.mkdir()
+    marker = real_parent / "outside.txt"
+    marker.write_text("preserve", encoding="utf-8")
+    linked_parent = tmp_path / "linked-output-parent"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    output = linked_parent / "catalog"
+    before = {path.name: path.read_bytes() for path in real_parent.iterdir() if path.is_file()}
+
+    with pytest.raises(ValueError, match="symbolic link component"):
+        write_mobile_catalog(
+            output,
+            np.array([[1.0, 0.0, 0.0]], dtype=np.float32),
+            rows_fixture(),
+            release_fixture(),
+        )
+
+    after = {path.name: path.read_bytes() for path in real_parent.iterdir() if path.is_file()}
+    assert after == before
+    assert not output.exists()
+
+
+def test_library_rejects_symlinked_rights_ancestor_without_input_mutation(
+    tmp_path: Path,
+) -> None:
+    real_parent = tmp_path / "real-rights-parent"
+    real_parent.mkdir()
+    real_rights = _write_rights(real_parent, _rights_payload())
+    linked_parent = tmp_path / "linked-rights-parent"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+    linked_rights = linked_parent / real_rights.name
+    before = real_rights.read_bytes()
+    output = tmp_path / "catalog"
+
+    with pytest.raises(ValueError, match="symbolic link component"):
+        write_mobile_catalog(
+            output,
+            np.array([[1.0, 0.0, 0.0]], dtype=np.float32),
+            rows_fixture(),
+            release_fixture(rights_path=linked_rights),
+        )
+
+    assert real_rights.read_bytes() == before
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("relation", ("equal", "output-contains-rights", "rights-contains-output"))
+def test_library_rejects_rights_output_overlap_without_partial_output(
+    tmp_path: Path, relation: str
+) -> None:
+    rights_parent = tmp_path / "rights-parent"
+    rights_parent.mkdir()
+    rights_path = _write_rights(rights_parent, _rights_payload())
+    if relation == "equal":
+        output = rights_path
+    elif relation == "output-contains-rights":
+        output = rights_parent
+    else:
+        output = rights_path / "catalog"
+    before = rights_path.read_bytes()
+
+    with pytest.raises(ValueError, match="overlap"):
+        write_mobile_catalog(
+            output,
+            np.array([[1.0, 0.0, 0.0]], dtype=np.float32),
+            rows_fixture(),
+            release_fixture(rights_path=rights_path),
+        )
+
+    assert rights_path.read_bytes() == before
+    assert not (rights_parent / "manifest.json").exists()
+    assert not (rights_parent / "references.f16").exists()
+    assert not (rights_parent / "metadata.json").exists()
+
+
 def test_manifest_payload_does_not_expose_dataclass_field_names() -> None:
     manifest = MobileCatalogManifest(
         schema_version=1,

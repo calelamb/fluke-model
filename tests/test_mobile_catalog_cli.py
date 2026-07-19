@@ -99,6 +99,9 @@ def _add_tool(payload: dict[str, Any]) -> dict[str, Any]:
         (lambda value: _replace_tool(value, torch="2.7.1"), "torch"),
         (lambda value: _replace_tool(value, transformers="5.3.0"), "transformers"),
         (lambda value: _replace_tool(value, python="3.12.1"), "python"),
+        (lambda value: _replace_tool(value, python="3.11.0"), "python"),
+        (lambda value: _replace_tool(value, python="3.11.14"), "python"),
+        (lambda value: _replace_tool(value, python="3.11.16"), "python"),
         (lambda value: _replace_tool(value, python=True), "python"),
     ],
 )
