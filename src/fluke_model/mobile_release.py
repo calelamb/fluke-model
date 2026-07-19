@@ -34,6 +34,7 @@ from fluke_model.mobile_release_contracts import (
     inspect_package,
     normalize_external_detail,
     passed,
+    reject_symlink_components,
     release_paths,
     require_sha256,
     safe_file_digest,
@@ -148,7 +149,12 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
 
 def verify_mobile_release_directory(release_dir: Path) -> MobileReleaseReport:
     """Inspect the fixed release layout and always return a fail-closed report."""
-    root = Path(release_dir).resolve(strict=False)
+    raw_root = Path(release_dir)
+    try:
+        reject_symlink_components(raw_root, "release directory")
+    except ValueError as error:
+        return failed_mobile_release_report(str(error))
+    root = raw_root.resolve(strict=False)
     try:
         report = _verify_mobile_release_directory(root)
     except _EXPECTED_INPUT_ERRORS as error:

@@ -343,6 +343,52 @@ def test_directory_verifier_accepts_complete_digest_bound_fixture(tmp_path: Path
     )
 
 
+def test_directory_verifier_rejects_symlinked_release_root(tmp_path: Path) -> None:
+    release_dir = build_release_fixture(tmp_path / "actual")
+    alias = tmp_path / "release-alias"
+    alias.symlink_to(release_dir, target_is_directory=True)
+
+    report = verify_mobile_release_directory(alias)
+    details = {gate.detail for gate in report.gates if gate.name in BOUNDARY_NAMES}
+
+    assert report.ready is False
+    assert details == {"release directory path contains a symbolic link component"}
+    assert str(alias) not in json.dumps(report_payload(report), sort_keys=True)
+
+
+def test_directory_verifier_rejects_symlinked_release_ancestor(tmp_path: Path) -> None:
+    actual_parent = tmp_path / "actual-parent"
+    release_dir = build_release_fixture(actual_parent)
+    alias_parent = tmp_path / "parent-alias"
+    alias_parent.symlink_to(actual_parent, target_is_directory=True)
+
+    report = verify_mobile_release_directory(alias_parent / release_dir.name)
+    details = {gate.detail for gate in report.gates if gate.name in BOUNDARY_NAMES}
+
+    assert report.ready is False
+    assert details == {"release directory path contains a symbolic link component"}
+    assert str(alias_parent) not in json.dumps(report_payload(report), sort_keys=True)
+
+
+def test_passing_report_is_identical_for_absolute_dot_and_relative_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release_dir = build_release_fixture(tmp_path)
+
+    absolute = report_payload(verify_mobile_release_directory(release_dir))
+    monkeypatch.chdir(release_dir)
+    dot = report_payload(verify_mobile_release_directory(Path(".")))
+    monkeypatch.chdir(tmp_path)
+    relative = report_payload(verify_mobile_release_directory(Path(release_dir.name)))
+    payloads = tuple(
+        json.dumps(payload, sort_keys=True).encode()
+        for payload in (absolute, dot, relative)
+    )
+
+    assert payloads[0] == payloads[1] == payloads[2]
+    assert absolute["ready"] is True
+
+
 def test_stale_copied_report_is_ignored_and_rebound_to_current_release(tmp_path: Path) -> None:
     release_dir = build_release_fixture(tmp_path)
     _write_json(
