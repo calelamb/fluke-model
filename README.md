@@ -14,6 +14,11 @@ HappyWhale, and FinID-20 experiments remain research evidence only; their presen
 historical result files does not establish production rights. MiewID remote code/checkpoints and
 non-commercial DINOv3 weights are excluded from the executable registry.
 
+The on-device Core ML package and fail-closed release verifier are implemented, but mobile release
+readiness remains blocked until a rights-cleared production catalog and digest-bound production
+evaluations exist. See the [mobile model card](docs/mobile-model-card.md) for intended use,
+exclusions, score semantics, provenance requirements, fixed release layout, and binding thresholds.
+
 ## Service
 
 Required environment:
@@ -52,6 +57,17 @@ uv run bandit -q -lll -r src scripts
 uv run pip-audit --skip-editable
 docker build -t fluke-model:local .
 ```
+
+Verify an assembled mobile candidate with:
+
+```bash
+uv run python scripts/verify_mobile_release.py \
+  --release-dir artifacts/mobile-release/candidate
+```
+
+The command writes `mobile-release-report.json` in the candidate directory and exits nonzero unless
+every package, catalog, digest, rights, parity, closed-set, open-set, cohort-presence, finiteness, and
+sample-count gate passes. Synthetic test fixtures are never production release evidence.
 
 The container downloads the exact revision during its image build, verifies every required file
 against a committed SHA256 allowlist, and runs Transformers in offline/local-only mode. CI builds a
