@@ -150,3 +150,17 @@ without a license or written permission explicitly permitting the intended ML an
 
 The harness code is MIT. Third-party model weights and datasets retain their own terms, and the
 runtime rights gate remains authoritative for production use.
+
+## Contributions
+
+Fluke-model is part of the [Fluke](https://github.com/calelamb/fluke) project — a
+non-commercial field guide for Pacific Northwest orcas — and is a single-author
+personal project. It is **not accepting outside contributions**; pull requests and
+feature issues aren't being reviewed. The source is public so the rights-safe
+methodology can be read and learned from, and the MIT-licensed harness code reused
+under its terms. Model weights and datasets keep their own licenses, and the
+runtime rights gate stays authoritative for any production use.
+
+The one message always welcome: if you hold rights to imagery the project could
+train on, or want to discuss a licensed catalog, reach the maintainer through the
+contact details on the live Fluke site.
