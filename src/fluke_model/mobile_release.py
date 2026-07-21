@@ -61,6 +61,7 @@ _BOUNDARY_GATE_NAMES = (
     "embedding_shape",
     "embedding_norm",
     "required_reports",
+    "runtime_reexecution",
 )
 _EXPECTED_INPUT_ERRORS = (
     EOFError,
@@ -150,10 +151,37 @@ def verify_mobile_release(evidence: MobileReleaseEvidence) -> MobileReleaseRepor
 
 def verify_mobile_release_directory(
     release_dir: Path,
-    *,
-    package_loader: Callable[[Path], Any] | None = None,
 ) -> MobileReleaseReport:
-    """Inspect the fixed release layout and always return a fail-closed report."""
+    """Re-execute the fixed production release and return a fail-closed report."""
+    from fluke_model.mobile_release_builder import reexecute_mobile_release
+
+    return _verify_mobile_release_directory_entry(
+        release_dir,
+        package_loader=None,
+        runtime_validator=reexecute_mobile_release,
+    )
+
+
+def _verify_mobile_release_directory_for_testing(
+    release_dir: Path,
+    *,
+    package_loader: Callable[[Path], Any],
+    runtime_validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
+) -> MobileReleaseReport:
+    """Exercise verifier contracts with explicit test-only execution adapters."""
+    return _verify_mobile_release_directory_entry(
+        release_dir,
+        package_loader=package_loader,
+        runtime_validator=runtime_validator,
+    )
+
+
+def _verify_mobile_release_directory_entry(
+    release_dir: Path,
+    *,
+    package_loader: Callable[[Path], Any] | None,
+    runtime_validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
+) -> MobileReleaseReport:
     raw_root = Path(release_dir)
     try:
         reject_symlink_components(raw_root, "release directory")
@@ -161,7 +189,11 @@ def verify_mobile_release_directory(
         return failed_mobile_release_report(str(error))
     root = raw_root.resolve(strict=False)
     try:
-        report = _verify_mobile_release_directory(root, package_loader=package_loader)
+        report = _verify_mobile_release_directory(
+            root,
+            package_loader=package_loader,
+            runtime_validator=runtime_validator,
+        )
     except _EXPECTED_INPUT_ERRORS as error:
         detail = normalize_external_detail(f"release input validation failed: {error}", root)
         report = failed_mobile_release_report(detail)
@@ -173,9 +205,7 @@ def failed_mobile_release_report(
 ) -> MobileReleaseReport:
     """Build a deterministic all-failed report for a bounded external-input error."""
     stable_detail = (
-        normalize_external_detail(detail, Path(release_dir))
-        if release_dir is not None
-        else detail
+        normalize_external_detail(detail, Path(release_dir)) if release_dir is not None else detail
     )
     validations = tuple(failed(name, stable_detail) for name in _BOUNDARY_GATE_NAMES)
     return verify_mobile_release(
@@ -248,6 +278,7 @@ def _verify_mobile_release_directory(
     release_dir: Path,
     *,
     package_loader: Callable[[Path], Any] | None,
+    runtime_validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
 ) -> MobileReleaseReport:
     paths = release_paths(release_dir)
     path_validation = validate_input_layout(paths)
@@ -255,7 +286,16 @@ def _verify_mobile_release_directory(
     catalog = _inspect_catalog(paths, package)
     rights = _inspect_rights(paths, catalog)
     embeddings = inspect_embeddings(paths, package.digest, catalog.digest)
-    evaluations = inspect_evaluations(paths, package.digest, catalog.digest)
+    manifest = catalog.validated.manifest if catalog.validated is not None else None
+    evaluations = inspect_evaluations(
+        paths,
+        package.digest,
+        catalog.digest,
+        score_threshold=manifest.score_threshold if manifest is not None else None,
+        margin_threshold=manifest.margin_threshold if manifest is not None else None,
+        catalog_rows=catalog.validated.rows if catalog.validated is not None else None,
+    )
+    runtime = _inspect_runtime_reexecution(paths, catalog, runtime_validator)
     evidence = _directory_evidence(
         path_validation,
         package,
@@ -263,6 +303,7 @@ def _verify_mobile_release_directory(
         rights,
         embeddings,
         evaluations,
+        runtime,
     )
     return verify_mobile_release(evidence)
 
@@ -274,6 +315,7 @@ def _directory_evidence(
     rights: ValidationEvidence,
     embeddings: EmbeddingEvidence,
     evaluations: EvaluationEvidence,
+    runtime: ValidationEvidence,
 ) -> MobileReleaseEvidence:
     return MobileReleaseEvidence(
         parity_cosine=embeddings.parity_cosine,
@@ -292,9 +334,26 @@ def _directory_evidence(
             embeddings.shape_validation,
             embeddings.norm_validation,
             evaluations.validation,
+            runtime,
         ),
         model_package_sha256=package.digest,
         catalog_manifest_sha256=catalog.digest,
+    )
+
+
+def _inspect_runtime_reexecution(
+    paths: ReleasePaths,
+    catalog: _CatalogEvidence,
+    validator: Callable[[ReleasePaths, ValidatedMobileCatalog], tuple[bool, str]],
+) -> ValidationEvidence:
+    if catalog.validated is None:
+        return failed("runtime_reexecution", "catalog unavailable for runtime re-execution")
+    try:
+        valid, detail = validator(paths, catalog.validated)
+    except _EXPECTED_INPUT_ERRORS as error:
+        return failed("runtime_reexecution", str(error))
+    return passed("runtime_reexecution", detail) if valid else failed(
+        "runtime_reexecution", detail
     )
 
 
@@ -400,7 +459,9 @@ def _boundary_gate(name: str, validations: tuple[ValidationEvidence, ...]) -> Ga
             "validation result is missing or duplicated",
         )
     evidence = matches[0]
-    return GateResult(name, evidence.passed, evidence.passed, "validation must pass", evidence.detail)
+    return GateResult(
+        name, evidence.passed, evidence.passed, "validation must pass", evidence.detail
+    )
 
 
 def _count_gate(name: str, value: object) -> GateResult:

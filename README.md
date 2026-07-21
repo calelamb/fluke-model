@@ -69,6 +69,42 @@ The command writes `mobile-release-report.json` in the candidate directory and e
 every package, catalog, digest, rights, parity, closed-set, open-set, cohort-presence, finiteness, and
 sample-count gate passes. Synthetic test fixtures are never production release evidence.
 
+Once a launch owner supplies a rights-cleared corpus and approval plan, build the complete release
+on macOS with an executable Core ML runtime:
+
+```bash
+uv sync --locked --extra coreml-export
+uv run python scripts/build_mobile_release.py \
+  --corpus-manifest /secure/release/corpus.json \
+  --corpus-root /secure/release/images \
+  --evaluation-plan /secure/release/evaluation-plan.json \
+  --rights /secure/release/rights-attestation.json \
+  --model-artifact artifacts/dinov2-small \
+  --model-package artifacts/mobile-release/candidate/FlukeEmbedder.mlpackage \
+  --model-metadata artifacts/mobile-release/candidate/export-metadata.json \
+  --manifest-version RELEASE_ID \
+  --minimum-app-build APPROVED_MINIMUM \
+  --maximum-app-build APPROVED_MAXIMUM \
+  --score-threshold APPROVED_SCORE_THRESHOLD \
+  --margin-threshold APPROVED_MARGIN_THRESHOLD \
+  --output-dir artifacts/mobile-release/RELEASE_ID
+```
+
+Thresholds are required approval inputs; the builder never searches or tunes them. It validates and
+hashes every manifest-named image, executes both pinned runtimes for parity, emits raw retrieval
+decisions, recomputes all metrics, stages a fresh release, and publishes only after the authoritative
+verifier returns `ready: true`. Core ML execution is mandatory and is never replaced with fabricated
+output on an unsupported platform.
+
+Export the exact three catalog resources for a compatible iOS build with:
+
+```bash
+uv run python scripts/export_verified_mobile_catalog.py \
+  --release-dir artifacts/mobile-release/RELEASE_ID \
+  --app-build APPROVED_APP_BUILD \
+  --output-dir artifacts/ios/IdentifierCatalog
+```
+
 Production evidence is explicit: rights attestations use `purpose: production`, while the committed
 fixture uses `purpose: test` and cannot satisfy the production verifier. Evaluation reports and
 `evaluation/parity.json` use `evidencePurpose: production`, an absolute HTTPS `provenanceUrl`, and a

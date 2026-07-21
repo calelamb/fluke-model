@@ -7,6 +7,7 @@ import math
 import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -24,6 +25,12 @@ from fluke_model.coreml_artifact import (
 from fluke_model.embedders import DINO_V2_MODEL_ID, DINO_V2_REVISION
 from fluke_model.mobile_catalog import sha256_file
 from fluke_model.mobile_export import mobile_model_contract
+from fluke_model.mobile_release_evidence import (
+    fixture_set_sha256,
+    load_published_fixture_rows,
+    load_raw_decisions,
+    recompute_metrics,
+)
 from fluke_model.model_artifact import DINOV2_ARTIFACT_SHA256
 from fluke_model.numpy_artifact import load_bounded_parity_array
 
@@ -39,6 +46,7 @@ OPEN_REPORTS = (
 _ROOT_ENTRIES = frozenset(
     {
         "FlukeEmbedder.mlpackage",
+        "source-model",
         "export-metadata.json",
         "rights-attestation.json",
         "catalog",
@@ -48,8 +56,12 @@ _ROOT_ENTRIES = frozenset(
 _CATALOG_ENTRIES = frozenset({"manifest.json", "metadata.json", "references.f16"})
 _EVALUATION_ENTRIES = frozenset(
     {
+        "fixtures",
         "parity-pytorch.npy",
         "parity-coreml.npy",
+        "fixture-manifest.json",
+        "decisions.json",
+        "evaluation-plan.json",
         "parity.json",
         "closed-set.json",
         *(filename for _, filename in OPEN_REPORTS),
@@ -117,6 +129,17 @@ _PARITY_REPORT_KEYS = {
     "pytorchEmbeddingsSha256",
     "coremlEmbeddingsSha256",
 }
+_EVALUATION_PLAN_KEYS = {
+    "schemaVersion",
+    "evidencePurpose",
+    "approvedBy",
+    "approvedAt",
+    "provenanceUrl",
+    "cohortDefinitions",
+    "scoreThreshold",
+    "marginThreshold",
+    "runtimeVersions",
+}
 _SHA256_LENGTH = 64
 
 
@@ -135,6 +158,7 @@ class ReleasePaths:
 
     root: Path
     package: Path
+    source_model: Path
     export_metadata: Path
     catalog_dir: Path
     catalog_manifest: Path
@@ -142,8 +166,12 @@ class ReleasePaths:
     catalog_metadata: Path
     rights: Path
     evaluation_dir: Path
+    fixture_images: Path
     pytorch_embeddings: Path
     coreml_embeddings: Path
+    fixture_manifest: Path
+    raw_decisions: Path
+    evaluation_plan: Path
     parity_report: Path
     closed_report: Path
     open_reports: tuple[tuple[str, Path], ...]
@@ -157,12 +185,12 @@ class ReleasePaths:
             ("rights-attestation.json", self.rights),
             ("evaluation/parity-pytorch.npy", self.pytorch_embeddings),
             ("evaluation/parity-coreml.npy", self.coreml_embeddings),
+            ("evaluation/fixture-manifest.json", self.fixture_manifest),
+            ("evaluation/decisions.json", self.raw_decisions),
+            ("evaluation/evaluation-plan.json", self.evaluation_plan),
             ("evaluation/parity.json", self.parity_report),
             ("evaluation/closed-set.json", self.closed_report),
-            *(
-                (f"evaluation/{path.name}", path)
-                for _, path in self.open_reports
-            ),
+            *((f"evaluation/{path.name}", path) for _, path in self.open_reports),
         )
 
 
@@ -198,6 +226,7 @@ def release_paths(root: Path) -> ReleasePaths:
     return ReleasePaths(
         root=release_root,
         package=release_root / "FlukeEmbedder.mlpackage",
+        source_model=release_root / "source-model",
         export_metadata=release_root / "export-metadata.json",
         catalog_dir=catalog,
         catalog_manifest=catalog / "manifest.json",
@@ -205,8 +234,12 @@ def release_paths(root: Path) -> ReleasePaths:
         catalog_metadata=catalog / "metadata.json",
         rights=release_root / "rights-attestation.json",
         evaluation_dir=evaluation,
+        fixture_images=evaluation / "fixtures",
         pytorch_embeddings=evaluation / "parity-pytorch.npy",
         coreml_embeddings=evaluation / "parity-coreml.npy",
+        fixture_manifest=evaluation / "fixture-manifest.json",
+        raw_decisions=evaluation / "decisions.json",
+        evaluation_plan=evaluation / "evaluation-plan.json",
         parity_report=evaluation / "parity.json",
         closed_report=evaluation / "closed-set.json",
         open_reports=tuple((kind, evaluation / filename) for kind, filename in OPEN_REPORTS),
@@ -226,6 +259,10 @@ def validate_input_layout(paths: ReleasePaths) -> ValidationEvidence:
         problems = (*problems, *_layout_problems(paths))
     if paths.package.is_symlink() or not paths.package.is_dir():
         problems = (*problems, "FlukeEmbedder.mlpackage is missing or not a regular directory")
+    if paths.source_model.is_symlink() or not paths.source_model.is_dir():
+        problems = (*problems, "source-model is missing or not a regular directory")
+    if paths.fixture_images.is_symlink() or not paths.fixture_images.is_dir():
+        problems = (*problems, "evaluation/fixtures is missing or not a regular directory")
     for relative, path in paths.required_files():
         problems = (*problems, *_file_problems(relative, path))
     return validation(
@@ -249,7 +286,14 @@ def inspect_package(
         if digest is None or digest != metadata["package_sha256"]:
             raise ValueError("Core ML package digest does not match export metadata")
         validate_coreml_package_interface(paths.package, package_loader=package_loader)
-    except (CoreMLExportError, OSError, OverflowError, UnicodeError, ValueError, TypeError) as error:
+    except (
+        CoreMLExportError,
+        OSError,
+        OverflowError,
+        UnicodeError,
+        ValueError,
+        TypeError,
+    ) as error:
         return PackageEvidence(digest, failed("package", str(error)))
     return PackageEvidence(
         digest,
@@ -317,26 +361,61 @@ def inspect_evaluations(
     paths: ReleasePaths,
     package_digest: str | None,
     catalog_digest: str | None,
+    *,
+    score_threshold: float | None = None,
+    margin_threshold: float | None = None,
+    catalog_rows: tuple[Any, ...] | None = None,
 ) -> EvaluationEvidence:
-    """Load all digest-bound closed/open-set reports without allowing partial success."""
+    """Recompute every retrieval metric from canonical, digest-bound raw evidence."""
     problems: tuple[str, ...] = ()
+    fixture_digest: str | None = None
+    recomputed: Mapping[str, Mapping[str, int | float]] | None = None
+    plan_provenance: str | None = None
     if package_digest is None or catalog_digest is None:
         problems = (*problems, "package or catalog digest unavailable for report provenance")
     try:
+        plan_provenance, plan_score, plan_margin = _validate_evaluation_plan(paths.evaluation_plan)
+        if score_threshold != plan_score or margin_threshold != plan_margin:
+            raise ValueError("catalog thresholds do not match the approved evaluation plan")
+        fixture_rows = load_published_fixture_rows(paths.fixture_manifest)
+        fixture_digest = fixture_set_sha256(fixture_rows)
+        _validate_fixture_catalog_binding(fixture_rows, catalog_rows)
+        decisions, decision_score, decision_margin = load_raw_decisions(paths.raw_decisions)
+        if score_threshold is None or decision_score != score_threshold:
+            raise ValueError("raw decision scoreThreshold does not match the catalog")
+        if margin_threshold is None or decision_margin != margin_threshold:
+            raise ValueError("raw decision marginThreshold does not match the catalog")
+        _validate_decision_fixture_coverage(fixture_rows, decisions)
+        recomputed = recompute_metrics(
+            decisions,
+            score_threshold=decision_score,
+            margin_threshold=decision_margin,
+        )
         closed = _load_evaluation_report(
             paths.closed_report,
             "closedSetRetrieval",
             _CLOSED_REPORT_KEYS,
             package_digest,
             catalog_digest,
+            expected_provenance=plan_provenance,
         )
+        _require_fixture_digest(closed, fixture_digest)
+        closed_metrics = recomputed.get("closedSetRetrieval")
+        if closed_metrics is None:
+            raise ValueError("raw decisions do not contain closed-set evidence")
+        _require_recomputed_metrics(closed, closed_metrics, "closedSetRetrieval")
         top_1, top_3 = _closed_metrics(closed)
         closed_count = positive_integer(closed["sampleCount"], "closed-set sampleCount")
     except (OSError, OverflowError, UnicodeError, ValueError, TypeError) as error:
         problems = (*problems, f"evaluation/closed-set.json: {error}")
         top_1, top_3, closed_count = None, None, 0
     open_results, open_problems = _load_open_reports(
-        paths, package_digest, catalog_digest
+        paths,
+        package_digest,
+        catalog_digest,
+        fixture_digest=fixture_digest,
+        recomputed=recomputed,
+        expected_provenance=plan_provenance,
     )
     problems = (*problems, *open_problems)
     return EvaluationEvidence(
@@ -479,16 +558,30 @@ def _layout_problems(paths: ReleasePaths) -> tuple[str, ...]:
     root_entries = frozenset(path.name for path in paths.root.iterdir())
     allowed_root = _ROOT_ENTRIES | {REPORT_FILENAME}
     if not _ROOT_ENTRIES.issubset(root_entries) or not root_entries.issubset(allowed_root):
-        problems = (*problems, "release root must contain exactly required entries and optional report")
+        problems = (
+            *problems,
+            "release root must contain exactly required entries and optional report",
+        )
     report_path = paths.root / REPORT_FILENAME
     if (report_path.exists() or report_path.is_symlink()) and (
         report_path.is_symlink() or not report_path.is_file()
     ):
         problems = (*problems, "optional report must be a regular non-symlink file")
-    problems = (*problems, *_exact_directory_problems(paths.catalog_dir, _CATALOG_ENTRIES, "catalog"))
+    problems = (
+        *problems,
+        *_exact_directory_problems(paths.catalog_dir, _CATALOG_ENTRIES, "catalog"),
+    )
     problems = (
         *problems,
         *_exact_directory_problems(paths.evaluation_dir, _EVALUATION_ENTRIES, "evaluation"),
+    )
+    problems = (
+        *problems,
+        *_exact_directory_problems(
+            paths.source_model,
+            frozenset(DINOV2_ARTIFACT_SHA256),
+            "source-model",
+        ),
     )
     return problems
 
@@ -572,14 +665,30 @@ def _load_open_reports(
     paths: ReleasePaths,
     package_digest: str | None,
     catalog_digest: str | None,
+    *,
+    fixture_digest: str | None,
+    recomputed: Mapping[str, Mapping[str, int | float]] | None,
+    expected_provenance: str | None,
 ) -> tuple[tuple[tuple[int, float], ...], tuple[str, ...]]:
     results: tuple[tuple[int, float], ...] = ()
     problems: tuple[str, ...] = ()
     for kind, path in paths.open_reports:
         try:
             payload = _load_evaluation_report(
-                path, kind, _OPEN_REPORT_KEYS, package_digest, catalog_digest
+                path,
+                kind,
+                _OPEN_REPORT_KEYS,
+                package_digest,
+                catalog_digest,
+                expected_provenance=expected_provenance,
             )
+            if fixture_digest is None or recomputed is None:
+                raise ValueError("canonical raw evaluation evidence is unavailable")
+            _require_fixture_digest(payload, fixture_digest)
+            metrics = recomputed.get(kind)
+            if metrics is None:
+                raise ValueError(f"raw decisions do not contain {kind} evidence")
+            _require_recomputed_metrics(payload, metrics, kind)
             count = positive_integer(payload["sampleCount"], f"{kind} sampleCount")
             rate = finite_rate(payload["falseAcceptRate"], f"{kind} falseAcceptRate")
             results = (*results, (count, rate))
@@ -594,6 +703,8 @@ def _load_evaluation_report(
     keys: set[str],
     package_digest: str | None,
     catalog_digest: str | None,
+    *,
+    expected_provenance: str | None = None,
 ) -> Mapping[str, Any]:
     payload = load_json_mapping(path, f"{evaluation_type} report")
     if set(payload) != keys:
@@ -601,13 +712,16 @@ def _load_evaluation_report(
     schema = payload["schemaVersion"]
     if isinstance(schema, bool) or not isinstance(schema, int) or schema != 1:
         raise ValueError("report schemaVersion must be the integer 1")
-    if not isinstance(payload["evaluationType"], str) or payload["evaluationType"] != evaluation_type:
+    if (
+        not isinstance(payload["evaluationType"], str)
+        or payload["evaluationType"] != evaluation_type
+    ):
         raise ValueError("report identity does not match its fixed release path")
     if package_digest is None or payload["modelPackageSha256"] != package_digest:
         raise ValueError("report package digest does not match the release")
     if catalog_digest is None or payload["catalogManifestSha256"] != catalog_digest:
         raise ValueError("report catalog digest does not match the release")
-    _validate_production_evidence(payload)
+    _validate_production_evidence(payload, expected_provenance=expected_provenance)
     return payload
 
 
@@ -640,10 +754,90 @@ def _validate_parity_report(
         raise ValueError("parity report PyTorch array digest does not match")
     if payload["coremlEmbeddingsSha256"] != sha256_file(paths.coreml_embeddings):
         raise ValueError("parity report Core ML array digest does not match")
-    _validate_production_evidence(payload)
+    fixture_rows = load_published_fixture_rows(paths.fixture_manifest)
+    parity_count = sum("parity" in row.roles for row in fixture_rows)
+    if parity_count != sample_count:
+        raise ValueError("parity fixture count does not match the arrays")
+    _require_fixture_digest(payload, fixture_set_sha256(fixture_rows))
+    plan_provenance, _, _ = _validate_evaluation_plan(paths.evaluation_plan)
+    _validate_production_evidence(payload, expected_provenance=plan_provenance)
 
 
-def _validate_production_evidence(payload: Mapping[str, Any]) -> None:
+def _validate_decision_fixture_coverage(
+    fixture_rows: tuple[Any, ...], decisions: tuple[Any, ...]
+) -> None:
+    fixtures = {row.fixture_id: row for row in fixture_rows}
+    observed: set[tuple[str, str]] = set()
+    for decision in decisions:
+        row = fixtures.get(decision.fixture_id)
+        if row is None or decision.evaluation_type not in row.roles:
+            raise ValueError("raw decision is not authorized by the fixture manifest")
+        identity = (decision.fixture_id, decision.evaluation_type)
+        if identity in observed:
+            raise ValueError("raw decisions contain duplicate evaluation fixtures")
+        observed.add(identity)
+        if (
+            decision.evaluation_type == "closedSetRetrieval"
+            and decision.truth_whale_id != row.whale_id
+        ):
+            raise ValueError("closed-set raw decision truth does not match the fixture manifest")
+    expected = {
+        (row.fixture_id, role)
+        for row in fixture_rows
+        for role in row.roles
+        if role == "closedSetRetrieval" or role in dict(OPEN_REPORTS)
+    }
+    if observed != expected:
+        raise ValueError("raw decisions do not exactly cover evaluation fixture roles")
+
+
+def _validate_fixture_catalog_binding(
+    fixture_rows: tuple[Any, ...], catalog_rows: tuple[Any, ...] | None
+) -> None:
+    if catalog_rows is None:
+        raise ValueError("catalog rows are unavailable for fixture binding")
+    fixture_references = {
+        (
+            row.reference_photo_id,
+            row.whale_id,
+            row.catalog_id,
+            row.source_id,
+        )
+        for row in fixture_rows
+        if "reference" in row.roles
+    }
+    published_references = {
+        (row.reference_photo_id, row.whale_id, row.catalog_id, row.source_id)
+        for row in catalog_rows
+    }
+    if fixture_references != published_references:
+        raise ValueError("fixture manifest references do not exactly match the published catalog")
+
+
+def _require_fixture_digest(payload: Mapping[str, Any], expected: str) -> None:
+    observed = require_sha256(payload["fixtureSetSha256"], "report fixtureSetSha256")
+    if observed != expected:
+        raise ValueError("report fixtureSetSha256 does not match the canonical fixture manifest")
+
+
+def _require_recomputed_metrics(
+    payload: Mapping[str, Any], metrics: Mapping[str, int | float], evaluation_type: str
+) -> None:
+    names = (
+        ("sampleCount", "top1", "top3")
+        if evaluation_type == "closedSetRetrieval"
+        else (
+            "sampleCount",
+            "falseAcceptRate",
+        )
+    )
+    if any(payload[name] != metrics[name] for name in names):
+        raise ValueError(f"{evaluation_type} report metrics do not match raw decisions")
+
+
+def _validate_production_evidence(
+    payload: Mapping[str, Any], *, expected_provenance: str | None = None
+) -> None:
     if payload["evidencePurpose"] != "production":
         raise ValueError("report evidencePurpose must be production")
     provenance = payload["provenanceUrl"]
@@ -652,7 +846,48 @@ def _validate_production_evidence(payload: Mapping[str, Any]) -> None:
     parsed = urlsplit(provenance)
     if parsed.scheme != "https" or not parsed.netloc:
         raise ValueError("report provenanceUrl must be an absolute HTTPS URL")
+    if expected_provenance is not None and provenance != expected_provenance:
+        raise ValueError("report provenanceUrl does not match the approved evaluation plan")
     require_sha256(payload["fixtureSetSha256"], "report fixtureSetSha256")
+
+
+def _validate_evaluation_plan(path: Path) -> tuple[str, float, float]:
+    payload = load_json_mapping(path, "evaluation plan")
+    if set(payload) != _EVALUATION_PLAN_KEYS:
+        raise ValueError("evaluation plan fields do not match the exact schema")
+    if payload["schemaVersion"] != 1 or isinstance(payload["schemaVersion"], bool):
+        raise ValueError("evaluation plan schemaVersion must be the integer 1")
+    if payload["evidencePurpose"] != "production":
+        raise ValueError("evaluation plan evidencePurpose must be production")
+    for name in ("approvedBy", "approvedAt"):
+        if not isinstance(payload[name], str) or not payload[name].strip():
+            raise ValueError(f"evaluation plan {name} must be a non-empty string")
+    try:
+        approved_at = datetime.fromisoformat(payload["approvedAt"].replace("Z", "+00:00"))
+    except ValueError as error:
+        raise ValueError("evaluation plan approvedAt must be an ISO-8601 timestamp") from error
+    if approved_at.tzinfo is None or approved_at.utcoffset() is None:
+        raise ValueError("evaluation plan approvedAt must include a timezone")
+    definitions = payload["cohortDefinitions"]
+    expected = {"parity", "closedSetRetrieval", *(kind for kind, _ in OPEN_REPORTS)}
+    if not isinstance(definitions, dict) or set(definitions) != expected:
+        raise ValueError("evaluation plan must define every fixed cohort")
+    if any(not isinstance(value, str) or not value.strip() for value in definitions.values()):
+        raise ValueError("evaluation plan cohort definitions must be non-empty strings")
+    provenance = payload["provenanceUrl"]
+    if not isinstance(provenance, str):
+        raise ValueError("evaluation plan provenanceUrl must be an absolute HTTPS URL")
+    parsed = urlsplit(provenance)
+    if parsed.scheme != "https" or not parsed.netloc:
+        raise ValueError("evaluation plan provenanceUrl must be an absolute HTTPS URL")
+    versions = payload["runtimeVersions"]
+    if not isinstance(versions, dict) or set(versions) != set(_TOOL_VERSIONS):
+        raise ValueError("evaluation plan runtimeVersions do not match the exact schema")
+    if versions != dict(_TOOL_VERSIONS):
+        raise ValueError("evaluation plan runtimeVersions do not match audited release versions")
+    score = finite_rate(payload["scoreThreshold"], "evaluation plan scoreThreshold", lower=-1.0)
+    margin = finite_rate(payload["marginThreshold"], "evaluation plan marginThreshold", lower=-1.0)
+    return provenance, score, margin
 
 
 def _closed_metrics(payload: Mapping[str, Any]) -> tuple[float, float]:

@@ -92,6 +92,9 @@ catalog/
 evaluation/
   parity-pytorch.npy
   parity-coreml.npy
+  fixture-manifest.json
+  decisions.json
+  evaluation-plan.json
   parity.json
   closed-set.json
   open-set.json
@@ -123,7 +126,32 @@ next exact-layout check.
 The two parity files are exact two-dimensional Float32 NumPy arrays with equal positive `(N, 384)`
 shape, finite values, and unit-normalized rows. Before allocation, the verifier bounds file bytes,
 parses and validates the `.npy` header, and enforces a maximum sample-row count. Parity is the
-minimum per-row cosine similarity. `evaluation/parity.json` has this exact schema:
+minimum per-row cosine similarity.
+
+The evaluation directory also contains canonical `fixture-manifest.json` and `decisions.json`
+files. The fixture manifest binds each stable fixture ID and approved role to a canonical relative
+path and the SHA256 of the actual image bytes. The builder rejects absolute paths, traversal,
+symbolic links, duplicate paths/IDs, missing files, and byte-digest mismatches. Every report's
+fixture-set digest is recomputed from this canonical manifest.
+
+Raw decisions record the fixed evaluation type, fixture ID, truth identity where applicable,
+ranked identities, first and second scores, and the eligibility result. They also carry the exact
+catalog score and margin thresholds. Verification requires exact fixture-role coverage, checks the
+thresholds against the catalog, recomputes eligibility with the iOS Float32 rule, and recomputes
+closed-set top-1/top-3 and every cohort false-accept rate. Hand-edited metric summaries cannot pass.
+
+The production corpus manifest has exact top-level keys `schemaVersion`, `evidencePurpose`,
+`provenanceUrl`, and `rows`. Each row has exactly `fixtureId`, `relativePath`, `imageSha256`,
+`roles`, `referencePhotoId`, `whaleId`, `catalogId`, and `sourceId`. Reference rows require all four
+identity/source values; closed-set rows require `whaleId`.
+
+The evaluation plan has exactly `schemaVersion`, `evidencePurpose`, `approvedBy`, timezone-aware
+`approvedAt`, HTTPS `provenanceUrl`, and `cohortDefinitions`; it defines parity, closed set, and all
+five open/robustness cohorts. Production construction rejects any corpus, plan, or rights
+attestation whose purpose is not `production`. The canonical plan is preserved as
+`evaluation/evaluation-plan.json`, and every report provenance URL must match it.
+
+`evaluation/parity.json` has this exact schema:
 
 ```text
 schemaVersion, evaluationType, evidencePurpose, provenanceUrl,
