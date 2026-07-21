@@ -18,8 +18,12 @@ from fluke_model.image_inputs import (
     decode_base64_image,
     load_validated_image,
 )
+from fluke_model.deadline import (
+    OperationCancelledError,
+    OperationDeadline,
+    OperationSupersededError,
+)
 from fluke_model.inference import BoundedInferenceRunner, InferenceBusyError
-from fluke_model.deadline import OperationCancelledError, OperationDeadline
 from fluke_model.rate_limit import RateLimiter
 from fluke_model.request_size import RequestSizeLimitMiddleware
 from fluke_model.settings import ServiceSettings
@@ -136,15 +140,19 @@ def create_app(settings: ServiceSettings, dependencies: ServiceDependencies) -> 
     async def rebuild_index(payload: dict[str, Any]) -> dict[str, Any]:
         deadline = OperationDeadline.after(settings.rebuild_timeout_seconds)
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 asyncio.to_thread(dependencies.rebuild, payload, deadline),
                 timeout=settings.rebuild_timeout_seconds,
             )
+            deadline.check()
+            return result
         except TimeoutError as exc:
             deadline.cancel()
             raise HTTPException(status_code=504, detail="index rebuild timed out") from exc
-        except OperationCancelledError as exc:
+        except OperationSupersededError as exc:
             raise HTTPException(status_code=409, detail="index rebuild was cancelled") from exc
+        except OperationCancelledError as exc:
+            raise HTTPException(status_code=504, detail="index rebuild timed out") from exc
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
